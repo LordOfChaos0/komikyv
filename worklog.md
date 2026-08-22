@@ -563,3 +563,64 @@ Stage Summary:
 - ✅ End-to-end word scramble tested: start game → scrambled letters → timer running → input field ready.
 - ✅ End-to-end daily goal tested: widget visible on Home with goal/XP/streak/activity breakdown.
 - Next: continue with more content, PWA support, export/import, additional features.
+
+---
+Task ID: CRON-QA-8
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 8)
+Task: QA testing, add 2 new features (Speed typing trainer, Komi proverbs collection), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with 23 API endpoints, all features from rounds 1-7.
+- Dev server running, all 16 student APIs return 200, lint clean.
+- No bugs found in QA — proceeded with feature development.
+
+NEW API ROUTES:
+1. `/api/proverbs` (GET) — Komi proverbs and idioms collection:
+   - 12 curated proverbs in 6 categories (wisdom, work, nature, friendship, time, family)
+   - Each proverb: komi text, russian translation, literal translation, meaning, category, word-by-word breakdown
+   - Static content (no DB), curated from Komi folklore
+   - Returns proverbs + categories with icons/colors
+
+NEW VIEWS:
+1. **Speed typing trainer** (`speed-typing-view.tsx`):
+   - Setup screen: instructions (60s duration, type Komi words, auto-advance on correct, WPM tracking)
+   - Playing state: large word display (text-5xl font-bold), translation hint above, input field below
+   - Auto-check: when input matches word, auto-advances after 300ms delay
+   - Wrong detection: if input length > word length, marks as error
+   - Stats: WPM (words per minute), accuracy (correctChars/totalChars), completed count, error count
+   - Timer: 60s countdown, red+pulse at ≤10s
+   - HUD: completed words, timer, WPM — all in badges
+   - TTS playback button for pronunciation
+   - Results screen: 4 stat boxes (words, WPM, accuracy, score) with icons, "Ещё раз" button
+   - Score = completed × 10 + accuracy
+
+2. **Proverbs view** (`proverbs-view.tsx`) — Komi proverbs and idioms:
+   - Category filter chips: Все / Мудрость / Труд / Природа / Дружба / Время / Семья
+   - Proverb cards with: Komi text (large bold primary), Russian translation, literal translation
+   - Expandable "Разбор и слова" section with:
+     - Meaning explanation (chart-2 colored card with Sparkles icon)
+     - Word-by-word breakdown (grid of komi word + ru translation)
+   - TTS playback button per proverb
+   - Category badge with color-coded icon
+   - Info card about Komi proverbs at bottom
+   - hover-lift + staggered fade-in animations
+
+NEW FEATURE INTEGRATIONS:
+- **Nav updates**: added "Скоропечать" (Keyboard icon) after word-scramble in all sidebars. Added "Пословицы" (Quote icon) after grammar in all sidebars.
+- **Routing**: speed-typing added to protectedViews, proverbs is public (accessible to guests).
+
+STYLING IMPROVEMENTS:
+- Speed typing: large text-5xl/6xl word display, color-coded feedback (chart-1 for correct, chart-3 for wrong), monospace input field with focus ring, 3-column stats bar
+- Proverbs: Quote icon for each proverb, color-coded category icons, expandable cards with smooth transitions, word grid with bg-muted/30, info card with dashed border
+- Both views use hover-lift, staggered fade-in, skeleton-shimmer loading states
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 24 API endpoints (23 previous + 1 new: proverbs) verified working via curl.
+- ✅ NEW: Speed typing trainer with WPM tracking, accuracy, 60s timer, auto-advance, TTS.
+- ✅ NEW: Proverbs collection with 12 proverbs, 6 categories, expandable word breakdown, TTS.
+- ✅ NEW: 2 new nav items (Скоропечать, Пословицы) in all sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end speed typing tested: start → word displayed (керка/дом) → timer running → input ready.
+- ✅ End-to-end proverbs tested: 12 proverbs displayed → expand first → meaning + word breakdown shown.
+- Next: continue with more content, PWA support, export/import, additional features.
