@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useNav } from "@/lib/nav-store";
 import { useAuth } from "@/lib/auth-store";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ import {
   ShieldCheck,
   TrendingUp,
   Layers,
+  Calendar,
+  Volume2,
+  Loader2,
 } from "lucide-react";
 
 export function HomeView() {
@@ -39,6 +43,11 @@ export function HomeView() {
     queryKey: ["progress"],
     queryFn: () => apiFetch<any>("/api/progress"),
     enabled: !!user,
+  });
+
+  const { data: wordOfDay } = useQuery({
+    queryKey: ["word-of-day"],
+    queryFn: () => apiFetch<any>("/api/word-of-day"),
   });
 
   return (
@@ -112,6 +121,11 @@ export function HomeView() {
           </div>
         </div>
       </section>
+
+      {/* Word of the Day */}
+      {wordOfDay?.word && (
+        <WordOfDayCard word={wordOfDay.word} dayOfYear={wordOfDay.dayOfYear} />
+      )}
 
       {/* Personal progress (if logged in) */}
       {user && progress && (
@@ -247,6 +261,13 @@ export function HomeView() {
             color="text-primary bg-primary/10"
             onClick={() => navigate("about")}
           />
+          <FeatureCard
+            icon={BookOpen}
+            title="Грамматический справочник"
+            description="Алфавит, фонетика, падежи, спряжение глаголов, синтаксис — структурированный справочник."
+            color="text-chart-1 bg-chart-1/10"
+            onClick={() => navigate("grammar")}
+          />
         </div>
       </section>
 
@@ -305,6 +326,118 @@ export function HomeView() {
 
 function levelLabel(level: string) {
   return level === "advanced" ? "Продвинутый" : level === "intermediate" ? "Средний" : "Начальный";
+}
+
+function WordOfDayCard({ word, dayOfYear }: { word: any; dayOfYear: number }) {
+  const { navigate } = useNav();
+  const [playing, setPlaying] = useState(false);
+
+  const speak = async () => {
+    setPlaying(true);
+    try {
+      const data = await apiFetch<{ audio: string }>("/api/tts", {
+        method: "POST",
+        json: { text: word.wordKomi, vocabId: word.id },
+      });
+      const audio = new Audio(data.audio);
+      audio.onended = () => setPlaying(false);
+      audio.play();
+    } catch (e: any) {
+      setPlaying(false);
+    }
+  };
+
+  const today = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <section>
+      <Card className="overflow-hidden border-2 border-chart-2/30">
+        <div className="h-1.5 bg-gradient-to-r from-chart-1 via-chart-2 to-chart-3" />
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <Badge className="mb-2 bg-chart-2/15 text-chart-2 border-chart-2/20">
+                <Sparkles className="h-3 w-3 mr-1" />
+                Слово дня
+              </Badge>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Calendar className="h-3 w-3" />
+                {today}
+              </div>
+            </div>
+            <div className="text-right text-xs text-muted-foreground">
+              <div>День</div>
+              <div className="font-bold text-lg text-foreground">{dayOfYear}</div>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-[1fr_auto] gap-6 items-start">
+            <div>
+              <div className="flex items-baseline gap-3 flex-wrap mb-2">
+                <h2 className="text-4xl font-bold text-primary">{word.wordKomi}</h2>
+                {word.partOfSpeech && (
+                  <Badge variant="outline" className="text-xs">
+                    {word.partOfSpeech}
+                  </Badge>
+                )}
+                <button
+                  onClick={speak}
+                  disabled={playing}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 transition-colors disabled:opacity-50"
+                  title="Прослушать произношение"
+                >
+                  {playing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              <div className="text-lg text-foreground/90 mb-1">{word.translationRu}</div>
+              {word.transcription && (
+                <div className="text-sm text-muted-foreground mb-3">[{word.transcription}]</div>
+              )}
+              {word.exampleKomi && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="text-sm italic text-foreground/80">«{word.exampleKomi}»</div>
+                  {word.exampleRu && (
+                    <div className="text-xs text-muted-foreground mt-0.5">{word.exampleRu}</div>
+                  )}
+                </div>
+              )}
+              {word.lesson && (
+                <button
+                  onClick={() => navigate("modules", { selectedModuleId: word.lesson.module.id })}
+                  className="mt-3 text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  Из урока: {word.lesson.module.title} → {word.lesson.title}
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Related words */}
+            {word.related && word.related.length > 0 && (
+              <div className="sm:w-56 space-y-2">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Связанные слова
+                </div>
+                {word.related.map((r: any) => (
+                  <div
+                    key={r.id}
+                    className="p-2 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors"
+                  >
+                    <div className="text-sm font-medium text-primary">{r.wordKomi}</div>
+                    <div className="text-xs text-muted-foreground">{r.translationRu}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
 }
 
 function StatBadge({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {

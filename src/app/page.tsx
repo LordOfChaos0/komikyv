@@ -11,6 +11,7 @@ import { LessonView } from "@/components/views/lesson-view";
 import { DialogView } from "@/components/views/dialog-view";
 import { FlashcardsView } from "@/components/views/flashcards-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
+import { GrammarView } from "@/components/views/grammar-view";
 import { VocabularyView } from "@/components/views/vocabulary-view";
 import { ProgressView } from "@/components/views/progress-view";
 import { AchievementsView } from "@/components/views/achievements-view";
@@ -92,6 +93,9 @@ export default function Home() {
       break;
     case "vocabulary":
       content = <VocabularyView />;
+      break;
+    case "grammar":
+      content = <GrammarView />;
       break;
     case "progress":
       content = <ProgressView />;

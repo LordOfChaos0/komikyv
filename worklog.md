@@ -112,3 +112,66 @@ Stage Summary:
 - ✅ NEW: 5 new CSS animations + skeleton-shimmer + hover-lift + text-gradient-komi utilities.
 - ✅ Lint clean, no TypeScript errors.
 - Next: continue improving styling on remaining views (lesson player, dialog, achievements), add spaced-repetition algorithm to flashcards (track known/unknown words across sessions), add pronunciation history persistence.
+
+---
+Task ID: CRON-QA-2
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 2)
+Task: QA testing, add 3 new features (Word-of-the-Day, Grammar reference, Command palette), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project was stable with all 13 API endpoints working, plus 2 new features from round 1 (Flashcards, Pronunciation trainer).
+- Dev server was already running on port 3000. Verified stable.
+- API QA: tested /api/auth/me, /api/modules, /api/categories, /api/progress, /api/achievements, /api/leaderboard, /api/vocabulary, /api/dialog/scenarios — all return HTTP 200.
+- Visual QA via agent-browser: tested 7 views (Карточки слов, Произношение, Диалоговый тренажёр, Словарь, Мой прогресс, Достижения, Рейтинг) — all render correctly.
+- No bugs found in current state — proceeded with new feature development.
+
+NEW FEATURES ADDED:
+1. **Word-of-the-Day** (`/api/word-of-day` route + `WordOfDayCard` component on HomeView):
+   - Deterministic word selection based on day of year (same word for whole day)
+   - Shows: word in Komi, translation, transcription, part of speech, example, link to source lesson
+   - TTS playback button (with cache via vocabId)
+   - "Связанные слова" sidebar with 3 related words from the same lesson
+   - Gradient top border in Komi national colors
+   - Visible to all users (logged in + guests)
+
+2. **Grammar reference page** (`/api/grammar` route + `grammar-data.ts` lib + `GrammarView` component):
+   - 8 sections in 5 categories: Алфавит, Фонетика, Морфология (Падежи, Местоимения, Глаголы), Синтаксис, Лексика (Числительные, Приветствия)
+   - Each section supports 5 block types: paragraph, table (with headers + rows), list, example, note (info/warning/success variants), heading_note
+   - Section list view with category filter chips (Все, Алфавит, Фонетика, Морфология, Синтаксис, Лексика)
+   - Detail view with back button, gradient header, scrollable content blocks, "Наверх ↑" button
+   - Tables support horizontal scroll on mobile
+   - Examples have TTS playback button
+   - Notes have color-coded variants (info/warning/success)
+   - Content covers: 35-letter alphabet with special letters ӧ/ї, 7 vowel sounds, 15 cases (with declension of "керка"), personal/possessive/interrogative pronouns, verb conjugation (вӧчны present+past), negative conjugation (ог), numerals 1-20 + ordinals, SOV word order, question/negation patterns, greetings/farewells/polite phrases
+
+3. **Command palette (Cmd+K)** (`CommandPalette` component + global shortcut in AppShell):
+   - Triggered by Cmd+K (macOS) / Ctrl+K (Windows/Linux) globally
+   - Also accessible via "Поиск..." button in sidebar (with ⌘K kbd hint) and search icon in mobile top bar
+   - Searches across: navigation (12+ items, role-filtered), modules (up to 20), vocabulary (50 with q filter), grammar sections (8)
+   - Results grouped by category (Навигация, Модули, Словарь, Грамматика, Действия)
+   - Keyboard navigation: ↑/↓ to move, Enter to select, Esc to close
+   - Active item highlighted with primary color, shows ↵ icon
+   - Footer with keyboard hints
+   - Auto-focuses input on open, clears query on close
+   - Role-aware: shows admin/teacher-only items conditionally
+
+4. **Sidebar nav updates**: added "Грамматика" (BookOpen icon) to student/teacher/admin nav arrays. Also added "Поиск..." button at top of sidebar with ⌘K keyboard hint.
+
+5. **Home features update**: added "Грамматический справочник" feature card linking to grammar view.
+
+STYLING IMPROVEMENTS:
+- WordOfDayCard: gradient top border (chart-1→chart-2→chart-3), large primary-colored word, calendar icon with current date, day-of-year counter, related words sidebar with hover effect.
+- GrammarView: category filter chips with active state, section cards with hover-lift + staggered fade-in (40ms delay), gradient icon backgrounds per category, detail view with back button + scroll-to-top.
+- Command palette: clean dialog with search input + ⌘K kbd hint, grouped results with uppercase category labels, active item with primary bg + ↵ icon, footer with keyboard hints.
+- AppShell: search button with group hover effect (kbd opacity changes), mobile top bar search icon.
+
+Stage Summary:
+- ✅ All 13 existing API endpoints verified working via curl.
+- ✅ All 7 existing views verified via agent-browser (Карточки, Произношение, Диалог, Словарь, Прогресс, Достижения, Рейтинг).
+- ✅ NEW: Word-of-the-Day API + HomeView widget with TTS, related words, lesson link.
+- ✅ NEW: Grammar reference page with 8 sections, 5 block types, category filter, detail view with TTS examples.
+- ✅ NEW: Command palette (Cmd+K) with global shortcut, sidebar button, mobile search icon, role-aware items, keyboard navigation.
+- ✅ NEW: Sidebar nav updated with Grammar + Search button.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ Dev server stable throughout testing.
+- Next: continue with more grammar content, add pronunciation history persistence, add spaced-repetition algorithm to flashcards.

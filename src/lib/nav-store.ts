@@ -10,6 +10,7 @@ export type ViewName =
   | "flashcards"
   | "pronunciation"
   | "vocabulary"
+  | "grammar"
   | "progress"
   | "achievements"
   | "leaderboard"
