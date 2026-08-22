@@ -175,3 +175,101 @@ Stage Summary:
 - ✅ Lint clean, no TypeScript errors.
 - ✅ Dev server stable throughout testing.
 - Next: continue with more grammar content, add pronunciation history persistence, add spaced-repetition algorithm to flashcards.
+
+---
+Task ID: CRON-QA-3
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 3)
+Task: QA testing, add 3 new features (Listening trainer, Favorites/bookmarks, Notifications/Activity feed), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with all features from rounds 1+2 (Flashcards, Pronunciation, Word-of-Day, Grammar, Command Palette).
+- Diagnosed server OOM kill (Turbopack + Chromium memory pressure). Restarted with NODE_OPTIONS=--max-old-space-size=2048 + setsid -f.
+- API QA: all existing endpoints return 200.
+- Lint clean, no errors.
+
+NEW SCHEMA CHANGES:
+- Added `Favorite` model: userId + vocabularyId (unique pair), note field (personal note)
+- Added `Notification` model: userId, type (achievement/streak/level_up/lesson_completed/dialog_completed/system/welcome), title, message, icon, color, link (nav target), linkParams, isRead
+- Updated User model: added `favorites` + `notifications` relations
+- Updated Vocabulary model: added `favorites` relation
+
+NEW API ROUTES:
+1. `/api/favorites` (GET, POST) — list + add favorites
+   - GET supports `?q=` search query
+   - POST accepts vocabularyId + optional note, upserts (idempotent)
+2. `/api/favorites/[id]` (DELETE, PATCH) — remove favorite / update note
+3. `/api/notifications` (GET, POST) — list + create notifications
+   - GET supports `?filter=all|unread&limit=N`
+   - Returns unreadCount + totalCount
+4. `/api/notifications/[id]` (PATCH, DELETE) — mark read/unread + delete
+5. `/api/notifications/mark-all-read` (POST) — bulk mark read
+6. `/api/listening` (GET) — returns random Komi sentence for listening practice
+   - Pulls from vocabulary.exampleKomi fields with translations
+   - Supports `?level=` filter
+
+NEW VIEWS:
+1. **Favorites view** (`favorites-view.tsx`) — personal word collection:
+   - Search within favorites
+   - Card list with: Komi word, translation, transcription, part of speech, lesson link, personal note
+   - TTS playback button per word
+   - Edit note (dialog with textarea)
+   - Delete favorite (with confirmation via toast)
+   - Empty state with hint to use heart icon in vocabulary
+
+2. **Notifications view** (`notifications-view.tsx`) — activity feed:
+   - Filter tabs: All / Unread (with count badge)
+   - "Отметить все" (Mark all read) bulk action button
+   - Color-coded cards per type (chart-1/2/3/4/5/primary)
+   - Lucide icon per notification
+   - Type badge (Достижение/Серия/Уровень/etc.)
+   - Relative timestamp (только что / X мин. назад / вчера / etc.)
+   - Click to navigate (uses `link` field to navigate to relevant view)
+   - Mark-as-read + delete per notification
+   - Empty states for both filters
+
+3. **Listening trainer** (`listening-view.tsx`) — comprehension practice:
+   - Setup screen: choose level (all/beginner/intermediate/advanced), session size = 10
+   - Session: big circular play button with pulse-ring animation
+   - Auto-plays TTS on first load, replays on click
+   - Play counter ("Прослушано N раз")
+   - "Показать текст" toggle to peek at the answer
+   - Textarea for user input with character count + Ctrl+Enter hint
+   - Word-level accuracy scoring (with Levenshtein for typo tolerance)
+   - Result: shows accuracy %, user input vs correct text side-by-side
+   - Progress bar across session (1/10, 2/10, etc.)
+   - Results screen: correct count, avg accuracy, XP gained (+5 per correct)
+   - Sentence review list at end
+
+NEW FEATURE INTEGRATIONS:
+- **Heart icon on vocabulary cards**: added Heart button next to Volume2 in vocabulary cards. Toast on add, invalidates favorites query.
+- **Notification bell in sidebar**: bell icon next to search button. Red pulsing badge with unread count (auto-refreshes every 30s via useQuery refetchInterval). Clicking navigates to notifications view.
+- **Auto-generated notifications**: 
+  - On registration: 2 welcome notifications (greeting + Cmd+K tip)
+  - On achievement unlock: "Новое достижение!" notification with achievement title + XP reward
+  - On level-up: "Новый уровень!" notification with new level name
+  - On streak milestones (3, 7, 14, 30 days): "Серия N дней!" notification
+- **Seed notifications**: 4 demo notifications created for student@komikyv.ru (welcome, achievement, system tip, streak)
+- **Auth route created**: /api/auth/register (was missing from previous round — found during QA!)
+
+STYLING IMPROVEMENTS:
+- Notification bell badge: pulsing animation, red bg-chart-3, "9+" overflow indicator
+- Listening trainer: pulse-ring animation on play button (custom keyframe from previous round)
+- Favorites: hover-lift + staggered fade-in on cards
+- Notifications: staggered fade-in, color-coded card backgrounds per type
+- Vocabulary cards: heart button with chart-3 color, hover effect
+- Sidebar: search + bell in flex row, responsive kbd hint
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048 + setsid -f.
+- ✅ All 13 existing API endpoints + 6 new endpoints verified working via curl.
+- ✅ NEW: Favorites API (CRUD) + view with notes + heart icon in vocabulary.
+- ✅ NEW: Notifications API (list/mark read/delete/bulk) + view with filter + bell badge in sidebar.
+- ✅ NEW: Listening trainer API + view with TTS auto-play, accuracy scoring, results.
+- ✅ NEW: Auto-generated notifications on registration, achievement, level-up, streak milestones.
+- ✅ NEW: 3 new views integrated into nav + page router + protected routes.
+- ✅ NEW: Notification bell with auto-refresh (30s refetchInterval).
+- ✅ Lint clean, no TypeScript errors.
+- ✅ All 8 main views verified via agent-browser (home, vocab, favorites, notifications, listening, flashcards, pronunciation, grammar).
+- ✅ End-to-end favorite flow tested: click heart → word added → see in favorites list.
+- ✅ End-to-end notification flow tested: mark read → unread count updates in sidebar.
+- Next: continue with more grammar content, add spaced-repetition algorithm, dialog history view.

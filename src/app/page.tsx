@@ -11,7 +11,10 @@ import { LessonView } from "@/components/views/lesson-view";
 import { DialogView } from "@/components/views/dialog-view";
 import { FlashcardsView } from "@/components/views/flashcards-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
+import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
+import { FavoritesView } from "@/components/views/favorites-view";
+import { NotificationsView } from "@/components/views/notifications-view";
 import { VocabularyView } from "@/components/views/vocabulary-view";
 import { ProgressView } from "@/components/views/progress-view";
 import { AchievementsView } from "@/components/views/achievements-view";
@@ -40,7 +43,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "flashcards", "pronunciation", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "flashcards", "pronunciation", "listening", "favorites", "notifications", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -91,11 +94,20 @@ export default function Home() {
     case "pronunciation":
       content = <PronunciationView />;
       break;
+    case "listening":
+      content = <ListeningView />;
+      break;
     case "vocabulary":
       content = <VocabularyView />;
       break;
     case "grammar":
       content = <GrammarView />;
+      break;
+    case "favorites":
+      content = <FavoritesView />;
+      break;
+    case "notifications":
+      content = <NotificationsView />;
       break;
     case "progress":
       content = <ProgressView />;

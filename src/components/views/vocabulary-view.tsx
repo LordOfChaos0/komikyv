@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,8 @@ export function VocabularyView() {
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [favLoading, setFavLoading] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const queryParams = new URLSearchParams({
     pageSize: "20",
@@ -41,6 +44,22 @@ export function VocabularyView() {
         `/api/vocabulary?${queryParams.toString()}`
       ),
   });
+
+  const toggleFavorite = async (vocabId: string) => {
+    setFavLoading(vocabId);
+    try {
+      await apiFetch("/api/favorites", {
+        method: "POST",
+        json: { vocabularyId: vocabId },
+      });
+      toast.success("Добавлено в избранное ♥");
+      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+    } catch (e: any) {
+      toast.error(e.message || "Не удалось добавить в избранное");
+    } finally {
+      setFavLoading(null);
+    }
+  };
 
   const speak = async (id: string, text: string) => {
     setPlaying(id);
@@ -162,19 +181,35 @@ export function VocabularyView() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="shrink-0 h-9 w-9"
-                    onClick={() => speak(v.id, v.wordKomi)}
-                    disabled={playing === v.id}
-                  >
-                    {playing === v.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Volume2 className="h-4 w-4" />
-                    )}
-                  </Button>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9"
+                      onClick={() => speak(v.id, v.wordKomi)}
+                      disabled={playing === v.id}
+                    >
+                      {playing === v.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Volume2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 text-chart-3 hover:bg-chart-3/10 hover:text-chart-3"
+                      onClick={() => toggleFavorite(v.id)}
+                      disabled={favLoading === v.id}
+                      title="В избранное"
+                    >
+                      {favLoading === v.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Heart className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -23,6 +23,9 @@ import {
   Mic,
   Search,
   Command,
+  Headphones,
+  Heart,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +37,8 @@ import {
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api-client";
 
 interface NavItem {
   view: ViewName;
@@ -47,8 +52,10 @@ const STUDENT_NAV: NavItem[] = [
   { view: "modules", label: "Учебные модули", icon: BookOpen },
   { view: "flashcards", label: "Карточки слов", icon: Layers },
   { view: "pronunciation", label: "Произношение", icon: Mic },
+  { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "favorites", label: "Избранное", icon: Heart, roles: ["student", "teacher", "admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
   { view: "achievements", label: "Достижения", icon: Trophy },
@@ -61,8 +68,10 @@ const TEACHER_NAV: NavItem[] = [
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "pronunciation", label: "Произношение", icon: Mic },
+  { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "favorites", label: "Избранное", icon: Heart, roles: ["teacher", "admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
@@ -77,7 +86,9 @@ const ADMIN_NAV: NavItem[] = [
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "pronunciation", label: "Произношение", icon: Mic },
+  { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "favorites", label: "Избранное", icon: Heart, roles: ["admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
@@ -88,6 +99,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Notifications unread count
+  const { data: notifData } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => apiFetch<{ unreadCount: number; totalCount: number }>("/api/notifications?limit=1"),
+    enabled: !!user,
+    refetchInterval: 30000, // refresh every 30s
+  });
+  const unreadCount = notifData?.unreadCount || 0;
 
   const navItems =
     user?.role === "admin"
@@ -134,18 +154,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </button>
 
-      {/* Search button */}
-      <div className="px-3 pb-2">
+      {/* Search button + notifications bell */}
+      <div className="px-3 pb-2 flex gap-2">
         <button
           onClick={() => setPaletteOpen(true)}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/40 hover:bg-muted transition-colors text-sm text-muted-foreground group"
+          className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/40 hover:bg-muted transition-colors text-sm text-muted-foreground group"
         >
-          <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">Поиск...</span>
-          <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-mono opacity-80 group-hover:opacity-100">
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left truncate">Поиск...</span>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-mono opacity-80 group-hover:opacity-100">
             <Command className="h-2.5 w-2.5" />K
           </kbd>
         </button>
+        {user && (
+          <button
+            onClick={() => navigate("notifications")}
+            className="relative shrink-0 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            title="Уведомления"
+          >
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-chart-3 text-white text-[10px] font-bold animate-pulse">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="komi-divider mx-4" />

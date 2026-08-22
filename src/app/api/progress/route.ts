@@ -103,6 +103,40 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Level-up notification
+    if (newLevel !== profile.level) {
+      const levelLabel =
+        newLevel === "advanced" ? "Продвинутый" : newLevel === "intermediate" ? "Средний" : "Начальный";
+      await db.notification.create({
+        data: {
+          userId: user.id,
+          type: "level_up",
+          title: "Новый уровень!",
+          message: `Вы достигли уровня «${levelLabel}»! Поздравляем!`,
+          icon: "TrendingUp",
+          color: "chart-2",
+          link: "progress",
+        },
+      }).catch(() => null);
+    }
+
+    // Streak milestone notifications
+    if (newStreak > profile.currentStreak) {
+      if ([3, 7, 14, 30].includes(newStreak)) {
+        await db.notification.create({
+          data: {
+            userId: user.id,
+            type: "streak",
+            title: `Серия ${newStreak} дней!`,
+            message: `Вы занимаетесь ${newStreak} дней подряд. Так держать! 🔥`,
+            icon: "Flame",
+            color: "chart-3",
+            link: "progress",
+          },
+        }).catch(() => null);
+      }
+    }
+
     // Award achievements
     const newAchievements: string[] = [];
 
@@ -194,6 +228,18 @@ async function awardAchievement(userId: string, code: string, newAchievements: s
     });
   }
   newAchievements.push(achievement.title);
+  // Create achievement notification
+  await db.notification.create({
+    data: {
+      userId,
+      type: "achievement",
+      title: "Новое достижение!",
+      message: `Вы получили достижение «${achievement.title}» (+${achievement.xpReward} XP)`,
+      icon: achievement.icon || "Trophy",
+      color: "chart-2",
+      link: "achievements",
+    },
+  }).catch(() => null);
 }
 
 // GET /api/progress — current user's overall progress (lessons completed, xp, streak, level)
