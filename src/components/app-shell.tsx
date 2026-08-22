@@ -33,6 +33,7 @@ import {
   Repeat,
   Gamepad2,
   LineChart,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,7 @@ const STUDENT_NAV: NavItem[] = [
   { view: "flashcards", label: "Карточки слов", icon: Layers },
   { view: "srs", label: "Интервальные повторения", icon: Repeat, roles: ["student", "teacher", "admin"] },
   { view: "word-matcher", label: "Слово-матч (игра)", icon: Gamepad2, roles: ["student", "teacher", "admin"] },
+  { view: "word-scramble", label: "Слово-пазл", icon: Shuffle, roles: ["student", "teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
@@ -81,6 +83,7 @@ const TEACHER_NAV: NavItem[] = [
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "srs", label: "Повторения", icon: Repeat, roles: ["teacher", "admin"] },
   { view: "word-matcher", label: "Слово-матч", icon: Gamepad2, roles: ["teacher", "admin"] },
+  { view: "word-scramble", label: "Слово-пазл", icon: Shuffle, roles: ["teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
@@ -105,6 +108,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "srs", label: "Повторения", icon: Repeat, roles: ["admin"] },
   { view: "word-matcher", label: "Слово-матч", icon: Gamepad2, roles: ["admin"] },
+  { view: "word-scramble", label: "Слово-пазл", icon: Shuffle, roles: ["admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["admin"] },

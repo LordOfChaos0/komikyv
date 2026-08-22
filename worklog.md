@@ -501,3 +501,65 @@ Stage Summary:
 - ✅ End-to-end teacher analytics tested: 4 modules, 0 students, activity chart renders.
 - ✅ End-to-end word matcher tested: start game → 6 pairs displayed → timer running → score visible.
 - Next: continue with more content, PWA support, export/import, additional games.
+
+---
+Task ID: CRON-QA-7
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 7)
+Task: QA testing, add 2 new features (Word scramble game, Daily goal widget), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with 22 API endpoints, all features from rounds 1-6.
+- Dev server running, all 16 student APIs return 200, lint clean.
+- No bugs found in QA — proceeded with feature development.
+
+NEW API ROUTES:
+1. `/api/daily-progress` (GET) — today's XP progress vs daily goal:
+   - Reads dailyGoalXp from StudentProfile.settingsJson
+   - Calculates XP earned today from: lessonProgress (completed/incomplete), dialogSessions (finished), srsReviews
+   - Returns: dailyGoal, xpToday, goalPercent, isGoalReached, remaining, streak, longestStreak, breakdown (lessons/dialogs/srsReviews), week totals
+   - Auto-refreshes every 60s via refetchInterval on client
+
+NEW VIEWS:
+1. **Word scramble game** (`word-scramble-view.tsx`):
+   - Setup screen: instructions (8 words, 90s, +15 XP/match, hint -3 XP, skip allowed)
+   - Playing state: scrambled letters in styled cards (h-12 w-10 with primary border), input field, translation hint (hidden by default)
+   - Hint system: shows translation for -3 XP penalty
+   - TTS playback button for pronunciation
+   - Skip button (counts as error)
+   - Timer: 90s countdown, red+pulse at ≤15s
+   - Result feedback: correct (green border+bg) or wrong (red border+bg, shows correct answer)
+   - Auto-advance to next word after 1-2s delay
+   - Progress bars: time progress + word progress
+   - Results screen: score/correct/errors with trophy icon, percent-based color
+   - "Играть ещё" button for replay
+   - Filters words to 3-12 chars, no spaces
+
+2. **Daily goal widget** (`daily-goal-widget.tsx`) — added to HomeView:
+   - Shows daily XP goal progress (xpToday / dailyGoal with %)
+   - Progress bar (turns chart-1 green when goal reached)
+   - "🎉 Цель достигнута!" badge when completed
+   - Streak counter with flame icon (current + record)
+   - 3 activity breakdown buttons (Уроки/Диалоги/SRS) with counts — clickable to navigate
+   - "Продолжить обучение" CTA button when goal not reached
+   - Auto-refreshes every 60s via refetchInterval
+
+NEW FEATURE INTEGRATIONS:
+- **Daily goal widget on Home**: placed between Word-of-the-Day and personal progress stats, visible to all logged-in users.
+- **Nav updates**: added "Слово-пазл" (Shuffle icon) to student/teacher/admin nav after "Слово-матч".
+- **Word scramble routing**: added to protectedViews + page.tsx router.
+
+STYLING IMPROVEMENTS:
+- Word scramble: styled letter cards (border-primary/30, bg-primary/5, text-2xl font-bold), gradient header bar, centered input with color-coded feedback
+- Daily goal widget: gradient top bar (chart-1→chart-2 or solid chart-1 when reached), large XP number, progress bar, streak card with chart-3 icon, 3-column activity grid with clickable buttons
+- Home: daily goal widget adds prominent "today's progress" element between word-of-day and overall stats
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 23 API endpoints (22 previous + 1 new: daily-progress) verified working via curl.
+- ✅ NEW: Word scramble game with 8 words, 90s timer, hint system, TTS, skip, results screen.
+- ✅ NEW: Daily goal widget on Home with XP progress, streak, activity breakdown, CTA.
+- ✅ NEW: 1 new nav item (Слово-пазл) in all sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end word scramble tested: start game → scrambled letters → timer running → input field ready.
+- ✅ End-to-end daily goal tested: widget visible on Home with goal/XP/streak/activity breakdown.
+- Next: continue with more content, PWA support, export/import, additional features.

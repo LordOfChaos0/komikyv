@@ -11,6 +11,7 @@ export type ViewName =
   | "flashcards"
   | "srs"
   | "word-matcher"
+  | "word-scramble"
   | "pronunciation"
   | "listening"
   | "vocabulary"

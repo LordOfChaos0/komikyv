@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useNav } from "@/lib/nav-store";
 import { useAuth } from "@/lib/auth-store";
+import { DailyGoalWidget } from "@/components/views/daily-goal-widget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -128,6 +129,11 @@ export function HomeView() {
       {/* Word of the Day */}
       {wordOfDay?.word && (
         <WordOfDayCard word={wordOfDay.word} dayOfYear={wordOfDay.dayOfYear} />
+      )}
+
+      {/* Daily goal widget (logged in only) */}
+      {user && (
+        <DailyGoalWidget />
       )}
 
       {/* Personal progress (if logged in) */}

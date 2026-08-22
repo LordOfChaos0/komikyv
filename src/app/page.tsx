@@ -13,6 +13,7 @@ import { DialogHistoryView } from "@/components/views/dialog-history-view";
 import { FlashcardsView } from "@/components/views/flashcards-view";
 import { SrsView } from "@/components/views/srs-view";
 import { WordMatcherView } from "@/components/views/word-matcher-view";
+import { WordScrambleView } from "@/components/views/word-scramble-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
 import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
@@ -50,7 +51,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "word-scramble", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -107,6 +108,9 @@ export default function Home() {
       break;
     case "word-matcher":
       content = <WordMatcherView />;
+      break;
+    case "word-scramble":
+      content = <WordScrambleView />;
       break;
     case "pronunciation":
       content = <PronunciationView />;
