@@ -13,8 +13,11 @@ import { FlashcardsView } from "@/components/views/flashcards-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
 import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
+import { AlphabetView } from "@/components/views/alphabet-view";
+import { QuizView } from "@/components/views/quiz-view";
 import { FavoritesView } from "@/components/views/favorites-view";
 import { NotificationsView } from "@/components/views/notifications-view";
+import { SettingsView } from "@/components/views/settings-view";
 import { VocabularyView } from "@/components/views/vocabulary-view";
 import { ProgressView } from "@/components/views/progress-view";
 import { AchievementsView } from "@/components/views/achievements-view";
@@ -43,7 +46,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "flashcards", "pronunciation", "listening", "favorites", "notifications", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "flashcards", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -103,11 +106,20 @@ export default function Home() {
     case "grammar":
       content = <GrammarView />;
       break;
+    case "alphabet":
+      content = <AlphabetView />;
+      break;
+    case "quiz":
+      content = <QuizView />;
+      break;
     case "favorites":
       content = <FavoritesView />;
       break;
     case "notifications":
       content = <NotificationsView />;
+      break;
+    case "settings":
+      content = <SettingsView />;
       break;
     case "progress":
       content = <ProgressView />;

@@ -28,6 +28,9 @@ import {
   Calendar,
   Volume2,
   Loader2,
+  Type,
+  Brain,
+  Settings,
 } from "lucide-react";
 
 export function HomeView() {
@@ -267,6 +270,27 @@ export function HomeView() {
             description="Алфавит, фонетика, падежи, спряжение глаголов, синтаксис — структурированный справочник."
             color="text-chart-1 bg-chart-1/10"
             onClick={() => navigate("grammar")}
+          />
+          <FeatureCard
+            icon={Type}
+            title="Интерактивный алфавит"
+            description="Изучайте 35 букв коми алфавита с произношением и тестом на знание букв."
+            color="text-chart-2 bg-chart-2/10"
+            onClick={() => navigate("alphabet")}
+          />
+          <FeatureCard
+            icon={Brain}
+            title="Мини-тесты"
+            description="Случайные подборки упражнений из модулей для проверки знаний и получения XP."
+            color="text-chart-3 bg-chart-3/10"
+            onClick={() => navigate("quiz")}
+          />
+          <FeatureCard
+            icon={Settings}
+            title="Персональные настройки"
+            description="Тёмная тема, выбор голоса TTS, дневная цель XP, уведомления и другое."
+            color="text-chart-4 bg-chart-4/10"
+            onClick={() => navigate("settings")}
           />
         </div>
       </section>

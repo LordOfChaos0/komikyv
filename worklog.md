@@ -273,3 +273,92 @@ Stage Summary:
 - ✅ End-to-end favorite flow tested: click heart → word added → see in favorites list.
 - ✅ End-to-end notification flow tested: mark read → unread count updates in sidebar.
 - Next: continue with more grammar content, add spaced-repetition algorithm, dialog history view.
+
+---
+Task ID: CRON-QA-4
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 4)
+Task: QA testing, add 3 new features (Settings page, Quiz generator, Alphabet practice), dark mode theme, improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with all features from rounds 1-3 (Flashcards, Pronunciation, Listening, Word-of-Day, Grammar, Command Palette, Favorites, Notifications).
+- Dev server was running, all 13 endpoints verified working.
+- No bugs found in QA — proceeded with feature development.
+
+NEW SCHEMA / API ROUTES:
+1. `/api/settings` (GET, PUT) — user learning settings (stored in StudentProfile.settingsJson as JSON):
+   - theme (light | dark), ttsVoice (7 voices), ttsSpeed (0.5-2.0), dailyGoalXp (10-500)
+   - showTranscription, showTranslationHint, autoPlayTts (booleans)
+   - preferredLevel (beginner|intermediate|advanced), emailNotifications, streakReminder, reducedMotion
+   - Defaults merged with stored values
+   - PUT supports partial updates (only changed fields)
+   - AuditLog entry on update
+
+2. `/api/quiz` (GET) — generates random mini-test:
+   - Query params: moduleId (optional), count (3-20, default 10)
+   - Returns shuffled exercises from selected module (or all)
+   - Strips correctAnswer from client response
+
+3. `/api/alphabet` (GET) — returns 35 Komi letters with full data:
+   - Each letter: lower, upper, name, sound (IPA), example (Komi word), translation, isVowel, isSpecial, isConsonant, description
+   - Special letters (ӧ, ї, ы, і) have descriptions explaining their unique features
+
+NEW VIEWS:
+1. **Settings view** (`settings-view.tsx`) — personalization:
+   - 5 sections: Внешний вид / Произношение и звук / Цели обучения / Отображение / Уведомления
+   - Theme toggle (light/dark) with Sun/Moon icons, syncs via next-themes
+   - Voice selection dropdown (7 TTS voices with descriptions)
+   - Speed slider (0.5-2.0x) with labels (Медленно/Норма/Быстро)
+   - Daily XP goal slider (10-500)
+   - Preferred level dropdown
+   - 6 toggle switches (transcription, translation hints, auto-play TTS, email notifs, streak reminders, reduced motion)
+   - "Проверить голос" button — plays test TTS with current settings
+   - "Сбросить настройки" — reset to defaults
+   - Auto-save indicator badge
+   - Settings persist in StudentProfile.settingsJson via /api/settings
+
+2. **Quiz view** (`quiz-view.tsx`) — randomized mini-tests:
+   - Setup: select module (or "all"), choose count (5/10/15/20)
+   - Session: progress bar, question counter, dot indicators with color states
+   - 6 exercise types: choice, translation, fill_blank, matching, audio, order
+   - Per-question check via /api/exercises/[id]/check
+   - Results: correct count, error count, XP gained (+5/correct), percent, detailed review list
+   - "Новый тест" button for re-generation
+
+3. **Alphabet view** (`alphabet-view.tsx`) — interactive Komi alphabet:
+   - Browse mode: grid of 35 letters, color-coded (special=chart-3, vowels=chart-2, consonants=primary)
+   - Filter chips: Все / Гласные / Согласные / Особые
+   - Letter detail modal: large upper+lower, name, IPA sound, example word with translation, TTS playback, description for special letters, type badges
+   - Test mode: 10 random letters, user types the lowercase letter, immediate feedback, progress bar, results screen
+
+NEW FEATURE INTEGRATIONS:
+- **Dark mode**: integrated next-themes ThemeProvider in Providers component (attribute="class", defaultTheme="light", enableSystem=false). Settings page toggles theme via setTheme() and persists choice via /api/settings. Dark theme CSS already existed in globals.css (was added in round 1 but not wired up).
+- **Settings gear icon**: added next to logout button in sidebar user block. Settings gear navigates to settings view.
+- **Home features update**: added 4 new feature cards (Алфавит, Мини-тесты, Настройки) linking to new views.
+- **Nav updates**: added "Мини-тест" (Brain icon) and "Алфавит" (Type icon) to student/teacher/admin nav.
+
+STYLING IMPROVEMENTS:
+- Settings cards: organized into 5 clear sections with icons (Sun, Volume2, Target, Eye, Mail)
+- Toggle rows: icon + label + description + Switch component, consistent layout
+- Theme toggle: dual-button (Sun/Moon) with active state highlighting
+- Alphabet letters: color-coded by type, hover-lift + staggered fade-in animation (30ms delay)
+- Letter detail modal: large gradient header bar, color-coded by letter type, info cards with bg-muted/30
+- Quiz: dot indicators with color states (primary active, chart-1 correct, chart-3 wrong, muted-foreground unchecked)
+- Quiz results: trophy icon with color based on percent, 3-column stats grid, detailed review list with colored borders
+- Alphabet test: huge 9xl letter display, color-coded by type, large input field with focus ring
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 16 API endpoints (13 previous + 3 new: settings, quiz, alphabet) verified working via curl.
+- ✅ NEW: Settings API + view with 11 settings, dark mode toggle, TTS test, voice selection.
+- ✅ NEW: Quiz API + view with random generation, 6 exercise types, results + review.
+- ✅ NEW: Alphabet API + view with 35 letters, browse + detail modal + test mode.
+- ✅ NEW: Dark mode working end-to-end (toggle → setTheme → persists via /api/settings).
+- ✅ NEW: Settings gear icon in sidebar user block.
+- ✅ NEW: 4 new feature cards on Home page (Алфавит, Мини-тест, Настройки + existing Грамматика).
+- ✅ NEW: 2 new nav items (Мини-тест, Алфавит) in student/teacher/admin sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ All 8 main views verified via agent-browser (home, alphabet, quiz, settings, vocab, favorites, listening, grammar).
+- ✅ End-to-end dark mode tested: click Moon → documentElement.className = "dark" → bg dark, fg light.
+- ✅ End-to-end alphabet test: type "ж" → "Верно!" → Верно: 1.
+- ✅ End-to-end settings persistence: PUT dailyGoal=100 → GET returns dailyGoal=100.
+- Next: continue with spaced-repetition algorithm for flashcards, dialog history view, more grammar content.

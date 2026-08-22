@@ -26,6 +26,9 @@ import {
   Headphones,
   Heart,
   Bell,
+  Settings as SettingsIcon,
+  Type,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +57,9 @@ const STUDENT_NAV: NavItem[] = [
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
+  { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["student", "teacher", "admin"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "alphabet", label: "Алфавит", icon: Type },
   { view: "favorites", label: "Избранное", icon: Heart, roles: ["student", "teacher", "admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
@@ -70,7 +75,9 @@ const TEACHER_NAV: NavItem[] = [
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
+  { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["teacher", "admin"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "alphabet", label: "Алфавит", icon: Type },
   { view: "favorites", label: "Избранное", icon: Heart, roles: ["teacher", "admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
@@ -87,7 +94,9 @@ const ADMIN_NAV: NavItem[] = [
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
+  { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["admin"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
+  { view: "alphabet", label: "Алфавит", icon: Type },
   { view: "favorites", label: "Избранное", icon: Heart, roles: ["admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
@@ -256,8 +265,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleLogout}
+                onClick={() => navigate("settings")}
                 className="ml-auto h-8 px-2 text-muted-foreground hover:text-foreground"
+                title="Настройки"
+              >
+                <SettingsIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                title="Выйти"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
