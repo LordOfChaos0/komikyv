@@ -17,6 +17,7 @@ import {
   Clock,
   Calendar,
 } from "lucide-react";
+import { ActivityHeatmap } from "@/components/views/activity-heatmap";
 
 export function ProgressView() {
   const { navigate } = useNav();
@@ -119,6 +120,9 @@ export function ProgressView() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      {/* Activity heatmap (full year) */}
+      <ActivityHeatmap />
 
       {/* Recent activity */}
       <Card>

@@ -9,7 +9,9 @@ import { RegisterView } from "@/components/views/register-view";
 import { ModulesView } from "@/components/views/modules-view";
 import { LessonView } from "@/components/views/lesson-view";
 import { DialogView } from "@/components/views/dialog-view";
+import { DialogHistoryView } from "@/components/views/dialog-history-view";
 import { FlashcardsView } from "@/components/views/flashcards-view";
+import { SrsView } from "@/components/views/srs-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
 import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
@@ -46,7 +48,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "flashcards", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -91,8 +93,14 @@ export default function Home() {
     case "dialog":
       content = <DialogView />;
       break;
+    case "dialog-history":
+      content = <DialogHistoryView />;
+      break;
     case "flashcards":
       content = <FlashcardsView />;
+      break;
+    case "srs":
+      content = <SrsView />;
       break;
     case "pronunciation":
       content = <PronunciationView />;

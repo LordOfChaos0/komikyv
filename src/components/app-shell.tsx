@@ -29,6 +29,8 @@ import {
   Settings as SettingsIcon,
   Type,
   Brain,
+  History,
+  Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,9 +56,11 @@ const STUDENT_NAV: NavItem[] = [
   { view: "home", label: "Главная", icon: Home },
   { view: "modules", label: "Учебные модули", icon: BookOpen },
   { view: "flashcards", label: "Карточки слов", icon: Layers },
+  { view: "srs", label: "Интервальные повторения", icon: Repeat, roles: ["student", "teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
+  { view: "dialog-history", label: "История диалогов", icon: History, roles: ["student", "teacher", "admin"] },
   { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["student", "teacher", "admin"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
   { view: "alphabet", label: "Алфавит", icon: Type },
@@ -72,6 +76,7 @@ const TEACHER_NAV: NavItem[] = [
   { view: "home", label: "Главная", icon: Home },
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
+  { view: "srs", label: "Повторения", icon: Repeat, roles: ["teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
@@ -81,6 +86,7 @@ const TEACHER_NAV: NavItem[] = [
   { view: "favorites", label: "Избранное", icon: Heart, roles: ["teacher", "admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
+  { view: "dialog-history", label: "История", icon: History, roles: ["teacher", "admin"] },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
   { view: "achievements", label: "Достижения", icon: Trophy },
 ];
@@ -92,6 +98,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "admin-users", label: "Пользователи", icon: Users, roles: ["admin"] },
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
+  { view: "srs", label: "Повторения", icon: Repeat, roles: ["admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["admin"] },
@@ -101,6 +108,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
+  { view: "dialog-history", label: "История", icon: History, roles: ["admin"] },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

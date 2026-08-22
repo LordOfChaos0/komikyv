@@ -37,6 +37,7 @@ model User {
   moderationActions ModerationLog[]
   favorites         Favorite[]
   notifications     Notification[]
+  srsReviews        SrsReview[]
 
   @@index([role])
   @@index([isActive])
@@ -169,6 +170,7 @@ model Vocabulary {
   deletedAt     DateTime?
 
   favorites     Favorite[]
+  srsReviews    SrsReview[]
 
   @@index([lessonId])
   @@index([wordKomi])
@@ -192,6 +194,34 @@ model Favorite {
   @@unique([userId, vocabularyId])
   @@index([userId])
   @@index([vocabularyId])
+}
+
+// ============================================================
+// SRS — интервальные повторения (SM-2 алгоритм)
+// ============================================================
+
+model SrsReview {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyId    String
+  vocabulary      Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  // SM-2 algorithm fields
+  interval        Int      @default(0) // days until next review
+  easinessFactor  Float    @default(2.5) // SM-2 easiness factor (1.3..3.0)
+  repetitions     Int      @default(0) // number of successful repetitions in a row
+  nextReviewAt    DateTime @default(now()) // when this card should next be reviewed
+  lastReviewedAt  DateTime? // when was last reviewed
+  // Stats
+  totalReviews    Int      @default(0)
+  correctReviews  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, vocabularyId])
+  @@index([userId])
+  @@index([vocabularyId])
+  @@index([nextReviewAt])
 }
 
 // ============================================================

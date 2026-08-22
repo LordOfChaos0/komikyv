@@ -362,3 +362,81 @@ Stage Summary:
 - ✅ End-to-end alphabet test: type "ж" → "Верно!" → Верно: 1.
 - ✅ End-to-end settings persistence: PUT dailyGoal=100 → GET returns dailyGoal=100.
 - Next: continue with spaced-repetition algorithm for flashcards, dialog history view, more grammar content.
+
+---
+Task ID: CRON-QA-5
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 5)
+Task: QA testing, add 3 new features (SRS spaced repetition, Dialog history, Activity heatmap), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with all features from rounds 1-4.
+- Dev server running, all 16 endpoints verified working.
+- Restarted server to pick up new Prisma client (SrsReview model).
+- No bugs found in QA — proceeded with feature development.
+
+NEW SCHEMA:
+- Added `SrsReview` model: userId, vocabularyId, interval, easinessFactor, repetitions, nextReviewAt, lastReviewedAt, totalReviews, correctReviews. Unique constraint on (userId, vocabularyId). Indexes on userId, vocabularyId, nextReviewAt.
+- Updated User + Vocabulary models with `srsReviews` relation.
+
+NEW API ROUTES:
+1. `/api/srs/due` (GET) — returns due cards (nextReviewAt <= now) + new cards (no SrsReview yet). Limit param (max 50). Returns stats: dueToday, newAvailable, learned, totalTracked, totalCards.
+2. `/api/srs/review` (POST) — records a review with quality 0-5. Applies SM-2 algorithm, updates interval/EF/repetitions/nextReviewAt. Awards XP (+1 per review, +2 if correct, +10 bonus if just learned). Creates notification when word becomes "learned" (interval >= 21 days).
+3. `/api/srs/stats` (GET) — overall SRS stats: dueToday, newCards, learning, learned, totalTracked, totalCards, reviewsToday, reviewsThisWeek, accuracy, masteryRate + 30-day activity chart.
+4. `/api/dialog/sessions` (GET) — list user's past dialog sessions with messages, scenario, score, preview. Take 50, ordered by startedAt desc.
+5. `/api/activity` (GET) — 365-day activity heatmap data. Combines lessonProgress, dialogSessions, srsReviews into per-day counts (lessons, dialogs, reviews, xp). Computes currentStreak, longestStreak, activeDays.
+
+NEW LIB:
+- `src/lib/srs.ts` — SM-2 algorithm implementation:
+  - `applySm2(currentState, quality)` — computes next interval/EF/repetitions based on quality (0-5)
+  - `QUALITY_OPTIONS` — 5 quality levels (Забыл, Почти, Трудно, Ок, Легко) with colors + icons
+  - `getSrsStatus(state)` — returns label/color/icon/description for a card's SRS state
+  - Interval rules: 1st success → 1 day, 2nd → 6 days, 3rd+ → interval × EF. Incorrect → reset to 1 day. "Learned" = interval >= 21 days.
+
+NEW VIEWS:
+1. **SRS view** (`srs-view.tsx`) — spaced repetition flashcards:
+   - Overview mode: 4 stat cards (due today, new, learned, accuracy), mastery progress bar with 3-state breakdown (new/learning/learned), CTA button, SM-2 algorithm explanation with quality options preview
+   - Session mode: 3D flip card (same as flashcards), quality rating buttons (5 options with color-coded icons), progress bar, "Новое"/"Повторение" badge per card
+   - Review flow: flip card → see answer → rate quality → SM-2 computes next interval → advance to next card
+   - Auto-invalidates srs-due, srs-stats, progress, notifications queries on review
+
+2. **Dialog history view** (`dialog-history-view.tsx`) — past conversations:
+   - List of past sessions with: scenario title, status badge, level, preview text, date/time, message count, user turns, score
+   - Click to open detail dialog with full message replay (user/assistant bubbles with TTS playback)
+   - "Новый диалог" CTA button
+   - Empty state with onboarding CTA
+
+3. **Activity heatmap** (`activity-heatmap.tsx`) — GitHub-style yearly heatmap:
+   - 365-day grid (53 weeks × 7 days), color-coded by activity level (5 levels: 0/muted, 1-4 chart-1 intensity)
+   - Month labels, weekday labels (Пн/Ср/Пт)
+   - Hover tooltip: date + total activities + XP
+   - Stats summary: current streak, longest streak, active days, total XP
+   - Activity breakdown: lessons, dialogs, SRS reviews per year
+   - Legend (Меньше → Больше)
+
+NEW FEATURE INTEGRATIONS:
+- **SRS integrated into Progress page**: ActivityHeatmap component added to ProgressView between the 7-day activity chart and recent activity list.
+- **SRS awards XP**: each review gives +1-3 XP, learned milestone gives +10 bonus XP.
+- **SRS creates notifications**: when a word becomes "learned" (interval >= 21), creates "Слово изучено! 🎓" notification.
+- **Dialog sessions API**: returns full messages array for replay in history view.
+- **Nav updates**: added "Интервальные повторения" (Repeat icon) and "История диалогов" (History icon) to student/teacher/admin nav.
+
+STYLING IMPROVEMENTS:
+- SRS overview: 4 gradient stat cards with highlight on "due today" if > 0, mastery progress bar with 3-state breakdown
+- SRS session: quality buttons with 5 color-coded options (chart-3 for wrong, chart-2 for hard, chart-1 for correct), hover scale effect
+- Dialog history: hover-lift cards with staggered fade-in, status-based icon colors (trophy for finished)
+- Activity heatmap: GitHub-style grid with 5 intensity levels, month/weekday labels, hover tooltip, legend
+- Progress page: heatmap adds visual year-long activity overview between 7-day chart and recent activity
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 21 API endpoints (16 previous + 5 new: srs/due, srs/review, srs/stats, dialog/sessions, activity) verified working via curl.
+- ✅ NEW: SrsReview model + SM-2 algorithm with 5 quality levels, interval scheduling, XP awards, learned milestone notifications.
+- ✅ NEW: SRS view with overview + session modes, 3D flip cards, quality rating, stats dashboard.
+- ✅ NEW: Dialog history view with session list + full message replay dialog + TTS playback.
+- ✅ NEW: Activity heatmap (GitHub-style) on Progress page with 365-day grid, streak stats, activity breakdown.
+- ✅ NEW: 2 new nav items (Интервальные повторения, История диалогов) in all sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end SRS tested: start session → flip card → rate "Легко" → POST /api/srs/review → card advances to next, XP +2, stats updated (1 learning, 100% accuracy).
+- ✅ End-to-end dialog history tested: empty state shows correctly with CTA.
+- ✅ End-to-end heatmap tested: "Активность за год" visible on Progress page.
+- Next: continue with more grammar content, teacher analytics, export/import settings, mobile PWA support.
