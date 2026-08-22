@@ -22,6 +22,7 @@ import { GrammarView } from "@/components/views/grammar-view";
 import { AlphabetView } from "@/components/views/alphabet-view";
 import { ProverbsView } from "@/components/views/proverbs-view";
 import { CultureView } from "@/components/views/culture-view";
+import { FolkTalesView } from "@/components/views/folktales-view";
 import { QuizView } from "@/components/views/quiz-view";
 import { FavoritesView } from "@/components/views/favorites-view";
 import { NotificationsView } from "@/components/views/notifications-view";
@@ -142,6 +143,9 @@ export default function Home() {
       break;
     case "culture":
       content = <CultureView />;
+      break;
+    case "folktales":
+      content = <FolkTalesView />;
       break;
     case "quiz":
       content = <QuizView />;

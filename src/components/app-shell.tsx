@@ -38,6 +38,7 @@ import {
   Quote,
   Grid3x3,
   Globe,
+  BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,7 @@ const STUDENT_NAV: NavItem[] = [
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "proverbs", label: "Пословицы", icon: Quote },
   { view: "culture", label: "Культура", icon: Globe },
+  { view: "folktales", label: "Сказки", icon: BookMarked },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
   { view: "achievements", label: "Достижения", icon: Trophy },
   { view: "leaderboard", label: "Рейтинг", icon: Users },
@@ -105,6 +107,7 @@ const TEACHER_NAV: NavItem[] = [
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "proverbs", label: "Пословицы", icon: Quote },
   { view: "culture", label: "Культура", icon: Globe },
+  { view: "folktales", label: "Сказки", icon: BookMarked },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
   { view: "dialog-history", label: "История", icon: History, roles: ["teacher", "admin"] },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
@@ -132,6 +135,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "proverbs", label: "Пословицы", icon: Quote },
   { view: "culture", label: "Культура", icon: Globe },
+  { view: "folktales", label: "Сказки", icon: BookMarked },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
   { view: "teacher-analytics", label: "Аналитика", icon: LineChart, roles: ["admin"] },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },

@@ -21,6 +21,7 @@ export type ViewName =
   | "alphabet"
   | "proverbs"
   | "culture"
+  | "folktales"
   | "quiz"
   | "favorites"
   | "notifications"

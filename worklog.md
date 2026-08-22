@@ -676,3 +676,51 @@ Stage Summary:
 - ✅ End-to-end memory cards tested: start → 12 cards displayed as "?" → timer running.
 - ✅ End-to-end culture tested: hero + facts + timeline + traditions + nature + people all visible.
 - Next: continue with more content, PWA support, export/import, additional features.
+
+---
+Task ID: CRON-QA-10
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 10)
+Task: QA testing, add 1 new feature (Komi folk tales collection), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with 24 API endpoints, all features from rounds 1-9.
+- Dev server running, all 17 student APIs return 200, lint clean.
+- No bugs found in QA — proceeded with feature development.
+
+NEW API ROUTES:
+1. `/api/folktales` (GET) — Komi folk tales and fairy tales collection:
+   - 5 curated tales in 3 levels (beginner: 2, intermediate: 2, advanced: 1)
+   - Each tale: title, titleKomi, level, duration, excerpt, fullText, moral, characters[], words[]
+   - Static content (no DB), curated from Komi folklore
+   - Tales: "Кощей и Печора", "Мышь-Норушка и Медведь", "Парма-мать", "Заяц и Лиса", "Семь ветров"
+
+NEW VIEWS:
+1. **Folk tales view** (`folktales-view.tsx`) — Komi fairy tales collection:
+   - Level filter chips: Все / Начальный / Средний / Продвинутый (with counts)
+   - Tale cards with: Russian title, Komi title (text-primary), level badge, duration badge, excerpt
+   - Expandable "Читать полностью" section with:
+     - Full text in styled <pre> block (whitespace-pre-wrap, bg-muted/30)
+     - "Озвучить отрывок" TTS button (first 500 chars)
+     - Moral card (chart-2 colored with Lightbulb icon)
+     - Characters grid (avatar initials + name + role)
+     - Vocabulary grid (komi word + ru translation)
+   - TTS playback for tale title
+   - Info card about Komi folktales at bottom (dashed border)
+   - hover-lift + staggered fade-in animations
+
+NEW FEATURE INTEGRATIONS:
+- **Nav updates**: added "Сказки" (BookMarked icon) after culture in all 3 nav arrays.
+- **Routing**: folktales is public (accessible to guests, not in protectedViews).
+
+STYLING IMPROVEMENTS:
+- Folktales: BookMarked icon, level filter chips, tale cards with excerpt preview, expandable full text in styled pre block, moral card with chart-2 border, character grid with avatar initials, vocabulary grid
+- Consistent with proverbs view styling (hover-lift, staggered fade-in, skeleton-shimmer loaders, info card with dashed border)
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 25 API endpoints (24 previous + 1 new: folktales) verified working via curl.
+- ✅ NEW: Folk tales collection with 5 tales, 3 levels, expandable full text, moral, characters, vocabulary, TTS.
+- ✅ NEW: 1 new nav item (Сказки) in all sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end folktales tested: 5 tales displayed → expand first → full text + moral + characters + vocabulary shown.
+- Next: continue with more content, PWA support, export/import, additional features.
