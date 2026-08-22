@@ -1,0 +1,319 @@
+// Prisma schema for «Коми кыв» — Komi language learning platform
+// SQLite datasource. Enums are modelled as String with default values.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Пользователи и роли (RBAC: guest, student, teacher, admin)
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String?
+  role         String   @default("student") // student | teacher | admin
+  isActive     Boolean  @default(true)
+  pdConsentAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  studentProfile    StudentProfile?
+  authoredModules   Module[]
+  lessonProgress    LessonProgress[]
+  dialogSessions    DialogSession[]
+  userAchievements  UserAchievement[]
+  authLogs          AuthLog[]
+  auditLogs         AuditLog[]
+  ownedMedia        MediaFile[]
+  moderationActions ModerationLog[]
+
+  @@index([role])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model StudentProfile {
+  userId         String   @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level          String   @default("beginner") // beginner | intermediate | advanced
+  xp             Int      @default(0)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActivityAt DateTime?
+  settingsJson   String   @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([level])
+}
+
+// ============================================================
+// Учебный контент: категории, модули, уроки, упражнения, словарь
+// ============================================================
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  color       String   @default("amber")
+  icon        String?
+  createdAt   DateTime @default(now())
+  modules     ModuleCategory[]
+
+  @@index([slug])
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  level       String   @default("beginner") // beginner | intermediate | advanced
+  status      String   @default("draft") // draft | on_moderation | published | rejected | archived
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  coverColor   String   @default("emerald")
+  estimatedMin Int     @default(30)
+  rejectionComment String?
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  lessons         Lesson[]
+  categories      ModuleCategory[]
+  moderationLogs  ModerationLog[]
+
+  @@index([status])
+  @@index([level])
+  @@index([authorId])
+  @@index([deletedAt])
+}
+
+model ModuleCategory {
+  moduleId String
+  module   Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([moduleId, categoryId])
+  @@index([categoryId])
+}
+
+model Lesson {
+  id            String   @id @default(cuid())
+  moduleId      String
+  module        Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title         String
+  orderIndex    Int
+  theoryContent String?
+  passingScore  Int      @default(70)
+  maxAttempts   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  exercises      Exercise[]
+  vocabulary     Vocabulary[]
+  lessonProgress LessonProgress[]
+
+  @@index([moduleId])
+  @@index([deletedAt])
+}
+
+model Exercise {
+  id            String   @id @default(cuid())
+  lessonId      String
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type          String   // translation | choice | matching | fill_blank | audio | order
+  question      String
+  questionRu    String?
+  optionsJson   String   @default("[]")
+  correctAnswer String
+  hint          String?
+  explanation   String?
+  scoreWeight   Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@index([lessonId])
+  @@index([type])
+  @@index([deletedAt])
+}
+
+model Vocabulary {
+  id            String   @id @default(cuid())
+  lessonId      String?
+  lesson        Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  wordKomi      String
+  translationRu String
+  transcription String?
+  exampleKomi   String?
+  exampleRu     String?
+  partOfSpeech  String? // noun | verb | adjective | phrase | ...
+  audioBase64   String? // кэшированное TTS-аудио (data:audio/...)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@index([lessonId])
+  @@index([wordKomi])
+  @@index([translationRu])
+  @@index([deletedAt])
+}
+
+// ============================================================
+// Геймификация: достижения, прогресс
+// ============================================================
+
+model Achievement {
+  id           String   @id @default(cuid())
+  code         String   @unique // first_lesson | streak_7 | dialog_master | ...
+  title        String
+  description  String?
+  criteriaJson String   @default("{}")
+  xpReward     Int      @default(0)
+  icon         String   @default("Trophy")
+  category     String   @default("learning") // learning | streak | dialog | social
+  createdAt    DateTime @default(now())
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement   @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  receivedAt    DateTime @default(now())
+
+  @@id([userId, achievementId])
+  @@index([achievementId])
+}
+
+model LessonProgress {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId      String
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  score         Int
+  isCompleted   Boolean  @default(false)
+  attemptNumber Int      @default(1)
+  answersJson   String   @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([lessonId])
+  @@index([isCompleted])
+}
+
+// ============================================================
+// Диалоговый тренажёр
+// ============================================================
+
+model DialogScenario {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  level        String   @default("beginner")
+  icon         String   @default("MessageCircle")
+  scenarioJson String   @default("{}") // {opening, context, vocabulary[], goal, language_style}
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  sessions     DialogSession[]
+
+  @@index([level])
+  @@index([deletedAt])
+}
+
+model DialogSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarioId   String?
+  scenario     DialogScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  status       String   @default("active") // active | finished | abandoned
+  messagesJson String   @default("[]") // [{role: 'assistant'|'user', content, audioBase64?, ts}]
+  scoreJson    String   @default("{}") // {grammar, vocabulary, pronunciation, overall}
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+
+  @@index([userId])
+  @@index([scenarioId])
+  @@index([status])
+}
+
+// ============================================================
+// Модерация и аудит
+// ============================================================
+
+model ModerationLog {
+  id        String   @id @default(cuid())
+  moduleId  String
+  module    Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  adminId   String?
+  admin     User?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  action    String   // submit | approve | reject | request_changes | publish | archive
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([moduleId])
+  @@index([adminId])
+}
+
+model AuthLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String?
+  ipAddress String?
+  userAgent String?
+  status    String   // success | failed | logout
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  entityType    String
+  entityId      String?
+  action        String
+  oldValuesJson String?
+  newValuesJson String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+}
+
+model MediaFile {
+  id         String   @id @default(cuid())
+  fileType   String   // audio | image | document
+  storagePath String
+  mimeType   String?
+  sizeBytes  Int?
+  ownerId    String?
+  owner      User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  deletedAt  DateTime?
+
+  @@index([ownerId])
+  @@index([fileType])
+}
