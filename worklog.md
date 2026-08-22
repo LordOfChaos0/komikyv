@@ -624,3 +624,55 @@ Stage Summary:
 - ✅ End-to-end speed typing tested: start → word displayed (керка/дом) → timer running → input ready.
 - ✅ End-to-end proverbs tested: 12 proverbs displayed → expand first → meaning + word breakdown shown.
 - Next: continue with more content, PWA support, export/import, additional features.
+
+---
+Task ID: CRON-QA-9
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 9)
+Task: QA testing, add 2 new features (Memory cards game, Komi culture page), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with 24 API endpoints, all features from rounds 1-8.
+- Dev server running, all 17 student APIs return 200, lint clean.
+- No bugs found in QA — proceeded with feature development.
+
+NEW VIEWS:
+1. **Memory cards game** (`memory-cards-view.tsx`):
+   - Setup → playing → finished: 6 pairs (12 cards), 120s timer
+   - Grid of 3×4 cards (sm:grid-cols-4), aspect-[3/4] cards with "?" placeholder
+   - Click to flip: shows komi word (text-primary) or russian translation
+   - Auto-check: 2 flipped → match (same vocabId, different type) → green ✓ → auto-advance
+   - Wrong match: red border + scale-95 → reset after 800ms → error count++
+   - TTS playback on flipped komi cards (Volume2 button)
+   - Stats: matched pairs, timer, score, errors
+   - Timer: 120s countdown, red+pulse at ≤20s
+   - Results: score/matched/errors with trophy/clock icon, +3 XP per remaining second bonus
+   - hover:scale-105 on unflipped cards, staggered animationDelay
+
+2. **Culture page** (`culture-view.tsx`) — Komi culture and history:
+   - Hero section with gradient (primary→chart-3) + komi-ornament overlay
+   - 4 quick fact cards: territory (416.8k km²), population (~150k), capital (Сыктывкар), language family (финно-угорская)
+   - Timeline of history: 14th century (Стефан Пермский + анбур), 15-16th (присоединение к Руси), 18th (реформа письменности), 1918-30s (национальное возрождение), 1922 (автономия), 1992 (современная Республика)
+   - Traditions section: 4 cards (народная музыка, орнаменты, тайга и оленеводство, праздники)
+   - Nature section: тайга (70% forests, Печоро-Илычский заповедник, ЮНЕСКО), реки и горы (Печора, Урал, Манипупунёр)
+   - Famous people: Иван Куратов, Стефан Пермский, Василий Лыткин
+   - CTA buttons linking to modules, grammar, proverbs
+
+NEW FEATURE INTEGRATIONS:
+- **Nav updates**: added "Карточки памяти" (Grid3x3 icon) after speed-typing in student nav, "Память" in teacher/admin nav. Added "Культура" (Globe icon) after proverbs in all navs.
+- **Routing**: memory-cards added to protectedViews, culture is public (accessible to guests).
+
+STYLING IMPROVEMENTS:
+- Memory cards: aspect-[3/4] cards with hover:scale-105, color-coded states (matched=chart-1/10, wrong=chart-3/10, flipped=primary/5), large "?" placeholder, staggered animationDelay
+- Culture: gradient hero with komi-ornament overlay, 4 gradient fact cards, timeline with ring highlight, 4 tradition cards with colored icons, person cards with avatar initials
+- Timeline: vertical line with dots, highlight ring for key events
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 24 API endpoints verified working via curl.
+- ✅ NEW: Memory cards game with 6 pairs, 120s timer, TTS, match/wrong feedback, time bonus.
+- ✅ NEW: Komi culture page with history timeline, traditions, nature, famous people.
+- ✅ NEW: 2 new nav items (Карточки памяти, Культура) in all sidebars.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end memory cards tested: start → 12 cards displayed as "?" → timer running.
+- ✅ End-to-end culture tested: hero + facts + timeline + traditions + nature + people all visible.
+- Next: continue with more content, PWA support, export/import, additional features.

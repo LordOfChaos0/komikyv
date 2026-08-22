@@ -15,11 +15,13 @@ import { SrsView } from "@/components/views/srs-view";
 import { WordMatcherView } from "@/components/views/word-matcher-view";
 import { WordScrambleView } from "@/components/views/word-scramble-view";
 import { SpeedTypingView } from "@/components/views/speed-typing-view";
+import { MemoryCardsView } from "@/components/views/memory-cards-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
 import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
 import { AlphabetView } from "@/components/views/alphabet-view";
 import { ProverbsView } from "@/components/views/proverbs-view";
+import { CultureView } from "@/components/views/culture-view";
 import { QuizView } from "@/components/views/quiz-view";
 import { FavoritesView } from "@/components/views/favorites-view";
 import { NotificationsView } from "@/components/views/notifications-view";
@@ -53,7 +55,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "word-scramble", "speed-typing", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "word-scramble", "speed-typing", "memory-cards", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -117,6 +119,9 @@ export default function Home() {
     case "speed-typing":
       content = <SpeedTypingView />;
       break;
+    case "memory-cards":
+      content = <MemoryCardsView />;
+      break;
     case "pronunciation":
       content = <PronunciationView />;
       break;
@@ -134,6 +139,9 @@ export default function Home() {
       break;
     case "proverbs":
       content = <ProverbsView />;
+      break;
+    case "culture":
+      content = <CultureView />;
       break;
     case "quiz":
       content = <QuizView />;
