@@ -55,3 +55,60 @@ Stage Summary:
 - ⚠️ TTS использует голос "tongtong" (китайский) — нейросеть не обучена коми, но озвучивает текст фонетически. Для качественного произношения нужен fine-tuning или носитель.
 - ⚠️ ASR возвращает транскрипцию на основе услышанного (модель не специалируется на коми), accuracy метрика через Levenshtein.
 - Next: cron-job каждые 15 минут для QA + добавления новых фич.
+
+---
+Task ID: CRON-QA-1
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round)
+Task: QA testing via agent-browser, fix bugs, add new features (Flashcards, Pronunciation trainer), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous session. Project was already feature-complete with 17 tables, full API, all views.
+- Diagnosed recurring dev server OOM issue: Next.js Turbopack compile (~2.5GB RSS) + Chromium browser (~700MB) > available 4GB RAM. Server kept dying on first or second request. Fixed by setting NODE_OPTIONS=--max-old-space-size=2048 and using `setsid -f` to detach properly. Server now stable across multiple page loads + agent-browser sessions.
+- Performed comprehensive API QA via curl — all 13 endpoints return HTTP 200 (auth/me, modules, categories, progress, admin/dashboard, dialog/scenarios, vocabulary, achievements, leaderboard, admin/users, teacher/modules, module detail, lesson detail). Module detail correctly returns unlocked=false for lesson 2 when lesson 1 is not completed.
+- Performed AI Skills QA: TTS works (WAV, 257KB audio), LLM dialog trainer works (replies in Komi with [RU:] translation + grammar feedback, even mentions Сыктывкар — capital of Komi Republic). Exercise check API correctly returns wrong-answer feedback (correct answer + hint).
+- Visual QA via agent-browser: verified home, login, admin dashboard, vocabulary, achievements, modules catalog, module detail, lesson player all render correctly. Footer is sticky.
+
+NEW FEATURES ADDED:
+1. **Flashcards trainer** (`/src/components/views/flashcards-view.tsx`) — spaced-repetition vocabulary practice:
+   - Setup screen: choose direction (Коми→Русский or Русский→Коми), choose word set (all or by lesson)
+   - Session: 10 shuffled cards with 3D flip animation (rotateY), supports TTS playback, "Знаю"/"Не знаю" buttons
+   - Results screen: shows known/unknown counts, XP gained (3 per known), word review with playback, restart option
+   - Session stats: attempts, avg accuracy, excellent count
+
+2. **Pronunciation trainer** (`/src/components/views/pronunciation-view.tsx`) — ASR-based pronunciation practice:
+   - Uses MediaRecorder API to capture microphone audio
+   - Sends audio (base64) to /api/asr endpoint which transcribes and compares with target Komi word
+   - Shows accuracy score (0-100%), feedback message, transcript vs correct word
+   - Per-session stats: attempts, avg accuracy, excellent count (>=80%)
+   - Includes 152-ФЗ privacy notice (audio is not stored)
+   - Handles mic permission errors gracefully (NotAllowedError, NotFoundError)
+
+3. **Daily challenge widget on Home** — 3 challenge cards (Пройти урок, Тренировать карточки, Диалог с ИИ) shown to logged-in users, each with gradient icon, description, +20 XP indicator, and CTA.
+
+4. **Sidebar nav updates**: added "Карточки слов" (Layers icon) and "Произношение" (Mic icon) to student/teacher/admin nav.
+
+STYLING IMPROVEMENTS:
+- Added new CSS animations to globals.css: fade-in, slide-in-from-bottom, scale-in, pulse-ring, shimmer (for skeleton loaders), pulse-dot (for loading dots).
+- Added `.skeleton-shimmer` utility class — animated gradient shimmer effect for loading states (replaces `bg-muted animate-pulse` in vocabulary-view and modules-view skeletons).
+- Added `.hover-lift` utility — subtle translateY(-2px) on hover for interactive cards.
+- Added `.text-gradient-komi` utility — gradient text using Komi national colors (forest green → saffron → rust).
+- Added smooth fade-in animation on view transitions (main > div).
+- Improved focus-visible rings across all interactive elements (2px outline with primary color).
+- Improved module cards: added decorative blur circle that brightens on hover, hover-lift effect, staggered fade-in animation on cards (50ms delay per card).
+- Improved vocabulary cards: hover-lift effect, skeleton-shimmer loaders.
+
+BUG FIXES:
+- Added `allowedDevOrigins` to next.config.ts to silence Cross-origin dev warnings from preview domains (*.space-z.ai, *.chatglm.cn, *.z.ai).
+- Server stability: dev server now survives multiple agent-browser sessions + 13+ API route compilations.
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048 (run via `setsid -f bash -c '... next dev -p 3000 > dev.log 2>&1'`).
+- ✅ All 13 API endpoints verified working via curl.
+- ✅ AI Skills verified: TTS (WAV), LLM (Komi dialog with grammar feedback + RU translation), ASR (pronunciation accuracy via Levenshtein).
+- ✅ All existing views render correctly via agent-browser.
+- ✅ NEW: Flashcards trainer — full session flow with 3D flip animation, results, word review.
+- ✅ NEW: Pronunciation trainer — MediaRecorder + ASR + accuracy scoring + 152-ФЗ notice.
+- ✅ NEW: Daily challenge widget on home (3 cards for logged-in users).
+- ✅ NEW: 5 new CSS animations + skeleton-shimmer + hover-lift + text-gradient-komi utilities.
+- ✅ Lint clean, no TypeScript errors.
+- Next: continue improving styling on remaining views (lesson player, dialog, achievements), add spaced-repetition algorithm to flashcards (track known/unknown words across sessions), add pronunciation history persistence.

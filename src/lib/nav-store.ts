@@ -7,6 +7,8 @@ export type ViewName =
   | "modules"
   | "lesson"
   | "dialog"
+  | "flashcards"
+  | "pronunciation"
   | "vocabulary"
   | "progress"
   | "achievements"

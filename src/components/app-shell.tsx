@@ -19,6 +19,8 @@ import {
   Menu,
   Award,
   Sparkles,
+  Layers,
+  Mic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,8 @@ interface NavItem {
 const STUDENT_NAV: NavItem[] = [
   { view: "home", label: "Главная", icon: Home },
   { view: "modules", label: "Учебные модули", icon: BookOpen },
+  { view: "flashcards", label: "Карточки слов", icon: Layers },
+  { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
   { view: "vocabulary", label: "Словарь", icon: Library },
   { view: "progress", label: "Мой прогресс", icon: BarChart3 },
@@ -51,6 +55,8 @@ const STUDENT_NAV: NavItem[] = [
 const TEACHER_NAV: NavItem[] = [
   { view: "home", label: "Главная", icon: Home },
   { view: "modules", label: "Каталог", icon: BookOpen },
+  { view: "flashcards", label: "Карточки", icon: Layers },
+  { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
@@ -64,6 +70,8 @@ const ADMIN_NAV: NavItem[] = [
   { view: "admin-moderation", label: "Модерация", icon: Award, roles: ["admin"] },
   { view: "admin-users", label: "Пользователи", icon: Users, roles: ["admin"] },
   { view: "modules", label: "Каталог", icon: BookOpen },
+  { view: "flashcards", label: "Карточки", icon: Layers },
+  { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "vocabulary", label: "Словарь", icon: Library },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },

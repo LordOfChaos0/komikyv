@@ -120,8 +120,9 @@ export function VocabularyView() {
           {[...Array(8)].map((_, i) => (
             <Card key={i}>
               <CardContent className="p-4 space-y-2">
-                <div className="h-5 bg-muted rounded animate-pulse w-1/3" />
-                <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+                <div className="h-5 skeleton-shimmer rounded w-1/3" />
+                <div className="h-3 skeleton-shimmer rounded w-1/2" />
+                <div className="h-3 skeleton-shimmer rounded w-2/3 mt-3" />
               </CardContent>
             </Card>
           ))}
@@ -129,7 +130,7 @@ export function VocabularyView() {
       ) : data && data.items.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {data.items.map((v) => (
-            <Card key={v.id} className="hover:shadow-md transition-all">
+            <Card key={v.id} className="hover:shadow-md transition-all hover-lift animate-fade-in">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

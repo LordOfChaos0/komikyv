@@ -23,6 +23,7 @@ import {
   Bot,
   ShieldCheck,
   TrendingUp,
+  Layers,
 } from "lucide-react";
 
 export function HomeView() {
@@ -146,6 +147,46 @@ export function HomeView() {
         </section>
       )}
 
+      {/* Daily challenge widget (logged in only) */}
+      {user && (
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Задания на сегодня</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                Выполните ежедневные задания для поддержания серии
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <DailyChallengeCard
+              title="Пройти урок"
+              description="Завершите один урок сегодня"
+              icon={BookOpen}
+              color="from-chart-1 to-chart-4"
+              cta="К урокам"
+              onClick={() => navigate("modules")}
+            />
+            <DailyChallengeCard
+              title="Тренировать карточки"
+              description="10 карточек для запоминания"
+              icon={Layers}
+              color="from-chart-2 to-chart-1"
+              cta="Открыть карточки"
+              onClick={() => navigate("flashcards")}
+            />
+            <DailyChallengeCard
+              title="Диалог с ИИ"
+              description="Проведите одну тренировку диалога"
+              icon={Bot}
+              color="from-chart-3 to-chart-5"
+              cta="Начать диалог"
+              onClick={() => navigate("dialog")}
+            />
+          </div>
+        </section>
+      )}
+
       {/* Features */}
       <section>
         <div className="mb-6 flex items-center justify-between">
@@ -174,9 +215,16 @@ export function HomeView() {
           <FeatureCard
             icon={Mic}
             title="Тренировка произношения"
-            description="Слушайте, как произносятся слова, через синтез речи. Записывайте голос и получайте оценку произношения."
+            description="Записывайте голос через микрофон и получайте оценку точности произношения с помощью ASR-модели."
             color="text-chart-3 bg-chart-3/10"
-            onClick={() => navigate("vocabulary")}
+            onClick={() => navigate("pronunciation")}
+          />
+          <FeatureCard
+            icon={Layers}
+            title="Карточки слов"
+            description="Тренируйте запоминание коми слов в обоих направлениях с помощью интерактивных флеш-карточек."
+            color="text-chart-2 bg-chart-2/10"
+            onClick={() => navigate("flashcards")}
           />
           <FeatureCard
             icon={Trophy}
@@ -268,6 +316,49 @@ function StatBadge({ icon: Icon, label, value }: { icon: any; label: string; val
       </div>
       <div className="text-white text-lg font-bold mt-0.5">{value}</div>
     </div>
+  );
+}
+
+function DailyChallengeCard({
+  title,
+  description,
+  icon: Icon,
+  color,
+  cta,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: any;
+  color: string;
+  cta: string;
+  onClick: () => void;
+}) {
+  return (
+    <Card
+      className="group overflow-hidden hover:shadow-lg transition-all cursor-pointer relative"
+      onClick={onClick}
+    >
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${color}`} />
+      <CardContent className="p-4 pt-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className={`inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${color} text-white shrink-0 shadow-sm`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm leading-tight">{title}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{description}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">+20 XP</span>
+          <span className="text-primary font-medium group-hover:underline flex items-center gap-1">
+            {cta}
+            <ArrowRight className="h-3 w-3" />
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

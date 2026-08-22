@@ -139,19 +139,21 @@ export function ModulesView() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Card key={i} className="overflow-hidden">
-              <div className="h-28 bg-muted animate-pulse" />
+              <div className="h-28 skeleton-shimmer" />
               <CardContent className="p-4 space-y-2">
-                <div className="h-5 bg-muted rounded animate-pulse w-2/3" />
-                <div className="h-3 bg-muted rounded animate-pulse w-full" />
-                <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+                <div className="h-5 skeleton-shimmer rounded w-2/3" />
+                <div className="h-3 skeleton-shimmer rounded w-full" />
+                <div className="h-3 skeleton-shimmer rounded w-1/2" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : data && data.items.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.items.map((m) => (
-            <ModuleCard key={m.id} module={m} />
+          {data.items.map((m, i) => (
+            <div key={m.id} className="animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+              <ModuleCard module={m} />
+            </div>
           ))}
         </div>
       ) : (
@@ -206,11 +208,12 @@ function ModuleCard({ module: m }: { module: any }) {
 
   return (
     <Card
-      className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
+      className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group hover-lift"
       onClick={() => navigate("modules", { selectedModuleId: m.id })}
     >
-      <div className={`h-32 bg-gradient-to-br ${colorMap[m.coverColor] || colorMap.emerald} relative`}>
+      <div className={`h-32 bg-gradient-to-br ${colorMap[m.coverColor] || colorMap.emerald} relative overflow-hidden`}>
         <div className="absolute inset-0 komi-ornament opacity-40" />
+        <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10 blur-2xl group-hover:bg-white/20 transition-colors" />
         <div className="absolute top-3 left-3 flex gap-2">
           <Badge className="bg-white/20 text-white border-white/20 backdrop-blur">
             {levelLabel}
