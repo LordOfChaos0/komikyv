@@ -440,3 +440,64 @@ Stage Summary:
 - ✅ End-to-end dialog history tested: empty state shows correctly with CTA.
 - ✅ End-to-end heatmap tested: "Активность за год" visible on Progress page.
 - Next: continue with more grammar content, teacher analytics, export/import settings, mobile PWA support.
+
+---
+Task ID: CRON-QA-6
+Agent: Main (Z.ai Code orchestrator — cron-triggered QA + features round 6)
+Task: QA testing, add 2 new features (Teacher analytics dashboard, Word matcher game), improve styling.
+
+Work Log:
+- Reviewed worklog.md from previous round. Project stable with 21 API endpoints, all features from rounds 1-5.
+- Dev server running, all 12 student APIs return 200, lint clean.
+- No bugs found in QA — proceeded with feature development.
+
+NEW API ROUTES:
+1. `/api/teacher/analytics` (GET) — teacher/admin analytics dashboard:
+   - Overview stats: totalModules, totalStudents, totalCompletions, totalAttempts, overallAvg
+   - Module stats: per-module enrollments, completions, avgScore, lessonsCount, level, status
+   - Student list: per-student lessonsAttempted, lessonsCompleted, avgScore, xp, level, streak, lastActivity
+   - Activity chart: 30-day attempts + completions per day
+   - Hardest lessons: top 5 lessons with lowest avg scores
+   - Recent activity: 10 most recent progress entries
+
+NEW VIEWS:
+1. **Teacher analytics** (`teacher/teacher-analytics-view.tsx`):
+   - 4 overview stat cards (modules, students, completions, avg score) with gradient icons
+   - 30-day activity bar chart (attempts + completions) using Recharts
+   - Module stats grid with hover-lift cards showing enrollments, completions, avg score
+   - Hardest lessons list (top 5 lowest avg scores) with numbered ranking
+   - Student table with avatar, name, email, streak, lessons completed/attempted, avg score badge, XP
+   - Recent activity feed with color-coded dots (green=completed, red=attempted)
+   - Role-restricted to teacher + admin
+
+2. **Word matcher game** (`word-matcher-view.tsx`):
+   - Setup screen: instructions + start button, game rules (6 pairs, 60s, +10 XP/match, combo bonus, time bonus)
+   - Playing state: 2-column grid (Komi left, Russian right), independently shuffled
+   - Click-to-match: select Komi word → select translation → auto-check
+   - Visual feedback: matched=green+strikethrough, wrong=red+pulse, selected=primary+scale
+   - Combo system: consecutive correct matches give +2 XP per combo level
+   - Timer: 60s countdown, turns red+pulse at ≤10s
+   - HUD: matched count, timer, score, combo indicator (🔥 Серия xN)
+   - Results screen: win/lose state, score/matched/errors stats, time bonus
+   - "Играть ещё" button for replay
+
+NEW FEATURE INTEGRATIONS:
+- **Nav updates**: added "Слово-матч (игра)" (Gamepad2 icon) to student/teacher/admin nav. Added "Аналитика" (LineChart icon) to teacher/admin nav.
+- **Role restrictions**: teacher-analytics view is restricted to teacher + admin roles (added to roleRestricted in page.tsx).
+
+STYLING IMPROVEMENTS:
+- Teacher analytics: gradient stat cards, hover-lift module cards with staggered fade-in, numbered ranking for hardest lessons, student table with avatar + badges
+- Word matcher: 2-column game board with independently shuffled pairs, color-coded selection states (selected/wrong/matched), pulse animation on wrong match, scale on selected, timer turns red at low time, combo indicator with flame emoji
+- Results screen: trophy/clock icon based on win/lose, 3-column stats grid
+
+Stage Summary:
+- ✅ Dev server stable with NODE_OPTIONS=--max-old-space-size=2048.
+- ✅ All 22 API endpoints (21 previous + 1 new: teacher/analytics) verified working via curl.
+- ✅ NEW: Teacher analytics API + view with module stats, student list, activity chart, hardest lessons, recent activity.
+- ✅ NEW: Word matcher game with timed matching, combo system, score tracking, results screen.
+- ✅ NEW: 2 new nav items (Слово-матч, Аналитика) in appropriate sidebars.
+- ✅ NEW: teacher-analytics role-restricted to teacher + admin.
+- ✅ Lint clean, no TypeScript errors.
+- ✅ End-to-end teacher analytics tested: 4 modules, 0 students, activity chart renders.
+- ✅ End-to-end word matcher tested: start game → 6 pairs displayed → timer running → score visible.
+- Next: continue with more content, PWA support, export/import, additional games.

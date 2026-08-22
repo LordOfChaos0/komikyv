@@ -12,6 +12,7 @@ import { DialogView } from "@/components/views/dialog-view";
 import { DialogHistoryView } from "@/components/views/dialog-history-view";
 import { FlashcardsView } from "@/components/views/flashcards-view";
 import { SrsView } from "@/components/views/srs-view";
+import { WordMatcherView } from "@/components/views/word-matcher-view";
 import { PronunciationView } from "@/components/views/pronunciation-view";
 import { ListeningView } from "@/components/views/listening-view";
 import { GrammarView } from "@/components/views/grammar-view";
@@ -27,6 +28,7 @@ import { LeaderboardView } from "@/components/views/leaderboard-view";
 import { ProfileView } from "@/components/views/profile-view";
 import { TeacherModulesView } from "@/components/views/teacher/teacher-modules-view";
 import { TeacherModuleEditView } from "@/components/views/teacher/teacher-module-edit-view";
+import { TeacherAnalyticsView } from "@/components/views/teacher/teacher-analytics-view";
 import { AdminDashboardView } from "@/components/views/admin/admin-dashboard-view";
 import { AdminModerationView } from "@/components/views/admin/admin-moderation-view";
 import { AdminUsersView } from "@/components/views/admin/admin-users-view";
@@ -48,7 +50,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -60,6 +62,7 @@ export default function Home() {
   const roleRestricted: Record<string, string[]> = {
     "teacher-modules": ["teacher", "admin"],
     "teacher-module-edit": ["teacher", "admin"],
+    "teacher-analytics": ["teacher", "admin"],
     "admin-dashboard": ["admin"],
     "admin-moderation": ["admin"],
     "admin-users": ["admin"],
@@ -101,6 +104,9 @@ export default function Home() {
       break;
     case "srs":
       content = <SrsView />;
+      break;
+    case "word-matcher":
+      content = <WordMatcherView />;
       break;
     case "pronunciation":
       content = <PronunciationView />;
@@ -146,6 +152,9 @@ export default function Home() {
       break;
     case "teacher-module-edit":
       content = <TeacherModuleEditView />;
+      break;
+    case "teacher-analytics":
+      content = <TeacherAnalyticsView />;
       break;
     case "admin-dashboard":
       content = <AdminDashboardView />;

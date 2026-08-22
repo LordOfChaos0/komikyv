@@ -31,6 +31,8 @@ import {
   Brain,
   History,
   Repeat,
+  Gamepad2,
+  LineChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +59,7 @@ const STUDENT_NAV: NavItem[] = [
   { view: "modules", label: "Учебные модули", icon: BookOpen },
   { view: "flashcards", label: "Карточки слов", icon: Layers },
   { view: "srs", label: "Интервальные повторения", icon: Repeat, roles: ["student", "teacher", "admin"] },
+  { view: "word-matcher", label: "Слово-матч (игра)", icon: Gamepad2, roles: ["student", "teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "dialog", label: "Диалоговый тренажёр", icon: MessageCircle },
@@ -77,9 +80,11 @@ const TEACHER_NAV: NavItem[] = [
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "srs", label: "Повторения", icon: Repeat, roles: ["teacher", "admin"] },
+  { view: "word-matcher", label: "Слово-матч", icon: Gamepad2, roles: ["teacher", "admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "teacher-modules", label: "Мои модули", icon: GraduationCap, roles: ["teacher"] },
+  { view: "teacher-analytics", label: "Аналитика", icon: LineChart, roles: ["teacher", "admin"] },
   { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["teacher", "admin"] },
   { view: "vocabulary", label: "Словарь", icon: Library },
   { view: "alphabet", label: "Алфавит", icon: Type },
@@ -99,6 +104,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "srs", label: "Повторения", icon: Repeat, roles: ["admin"] },
+  { view: "word-matcher", label: "Слово-матч", icon: Gamepad2, roles: ["admin"] },
   { view: "pronunciation", label: "Произношение", icon: Mic },
   { view: "listening", label: "Аудирование", icon: Headphones },
   { view: "quiz", label: "Мини-тест", icon: Brain, roles: ["admin"] },
@@ -107,6 +113,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "favorites", label: "Избранное", icon: Heart, roles: ["admin"] },
   { view: "grammar", label: "Грамматика", icon: BookOpen },
   { view: "teacher-modules", label: "Конструктор", icon: GraduationCap, roles: ["admin"] },
+  { view: "teacher-analytics", label: "Аналитика", icon: LineChart, roles: ["admin"] },
   { view: "dialog", label: "Тренажёр", icon: MessageCircle },
   { view: "dialog-history", label: "История", icon: History, roles: ["admin"] },
 ];
