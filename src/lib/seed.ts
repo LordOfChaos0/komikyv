@@ -685,6 +685,7 @@ export async function seedDatabase() {
           fullName: u.fullName,
           role: u.role,
           isActive: true,
+          emailVerified: true, // Demo accounts are pre-verified
           pdConsentAt: new Date(),
         },
       });
