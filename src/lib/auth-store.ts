@@ -9,6 +9,7 @@ export interface CurrentUser {
   role: "student" | "teacher" | "admin";
   fullName: string | null;
   isActive: boolean;
+  emailVerified?: boolean;
   profile?: {
     level: string;
     xp: number;

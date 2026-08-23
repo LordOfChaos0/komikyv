@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, signToken, setSessionCookie, getRequestMeta } from "@/lib/auth";
+import { sendVerificationEmail, generateVerificationCode, isSmtpConfigured } from "@/lib/mailer";
 
 const RegisterSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    const codeExpiresAt = new Date();
+    codeExpiresAt.setMinutes(codeExpiresAt.getMinutes() + 15); // 15 min
+
     const user = await db.user.create({
       data: {
         email,
@@ -39,28 +45,33 @@ export async function POST(req: NextRequest) {
         role,
         isActive: true,
         pdConsentAt: consent ? new Date() : null,
+        emailVerified: false,
+        verificationCode,
+        codeExpiresAt,
       },
     });
 
-    // Create student profile for both students and teachers (teachers can also learn)
+    // Create student profile
     await db.studentProfile.create({
       data: { userId: user.id, level: "beginner", xp: 0 },
     });
 
-    // Welcome notification
+    // Send verification email
+    const emailResult = await sendVerificationEmail(email, verificationCode, fullName);
+
+    // Welcome notifications
     await db.notification.create({
       data: {
         userId: user.id,
         type: "welcome",
         title: "Добро пожаловать! 🎉",
-        message: `Вэллы, ${fullName}! Начните обучение с раздела «Учебные модули». Удачи в изучении коми языка!`,
+        message: `Вэллы, ${fullName}! Подтвердите свой email, чтобы получить полный доступ к платформе.`,
         icon: "Sparkles",
         color: "chart-1",
         link: "modules",
       },
     }).catch(() => null);
 
-    // Second welcome with tips
     await db.notification.create({
       data: {
         userId: user.id,
@@ -83,6 +94,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
+      emailVerification: {
+        sent: emailResult.sent,
+        devCode: emailResult.devCode || null, // shown in dev mode when SMTP not configured
+        smtpConfigured: isSmtpConfigured(),
+        message: emailResult.sent
+          ? `Код подтверждения отправлен на ${email}`
+          : "SMTP не настроен — код показан в UI (dev-режим)",
+      },
     });
   } catch (e) {
     console.error("Register error:", e);

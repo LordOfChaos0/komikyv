@@ -15,16 +15,19 @@ datasource db {
 // ============================================================
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  fullName     String?
-  role         String   @default("student") // student | teacher | admin
-  isActive     Boolean  @default(true)
-  pdConsentAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  fullName         String?
+  role             String   @default("student") // student | teacher | admin
+  isActive         Boolean  @default(true)
+  pdConsentAt      DateTime?
+  emailVerified    Boolean  @default(false)
+  verificationCode String?  // 6-digit code for email verification
+  codeExpiresAt    DateTime? // when the verification code expires
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
 
   studentProfile    StudentProfile?
   authoredModules   Module[]

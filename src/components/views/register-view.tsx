@@ -31,11 +31,18 @@ export function RegisterView() {
     setErrors({});
     setLoading(true);
     try {
-      const data = await apiFetch<{ user: any }>("/api/auth/register", {
+      const data = await apiFetch<{ user: any; emailVerification?: any }>("/api/auth/register", {
         method: "POST",
         json: form,
       });
-      toast.success(`Аккаунт создан! Добро пожаловать, ${data.user.fullName || data.user.email}`);
+      // Check if email verification was sent
+      if (data.emailVerification?.sent) {
+        toast.success(`Аккаунт создан! Код подтверждения отправлен на ${form.email}`);
+      } else if (data.emailVerification?.devCode) {
+        toast.success(`Аккаунт создан! Код подтверждения: ${data.emailVerification.devCode}`);
+      } else {
+        toast.success(`Аккаунт создан! Добро пожаловать, ${data.user.fullName || data.user.email}`);
+      }
       await refresh();
       navigate("home");
     } catch (e: any) {

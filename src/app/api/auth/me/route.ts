@@ -7,10 +7,16 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ user: null });
   }
-  const profile = await db.studentProfile.findUnique({
-    where: { userId: user.id },
-    select: { level: true, xp: true, currentStreak: true, longestStreak: true, lastActivityAt: true },
-  });
+  const [profile, dbUser] = await Promise.all([
+    db.studentProfile.findUnique({
+      where: { userId: user.id },
+      select: { level: true, xp: true, currentStreak: true, longestStreak: true, lastActivityAt: true },
+    }),
+    db.user.findFirst({
+      where: { id: user.id },
+      select: { emailVerified: true },
+    }),
+  ]);
   return NextResponse.json({
     user: {
       id: user.id,
@@ -18,6 +24,7 @@ export async function GET() {
       role: user.role,
       fullName: user.fullName,
       isActive: user.isActive,
+      emailVerified: dbUser?.emailVerified ?? false,
       profile,
     },
   });

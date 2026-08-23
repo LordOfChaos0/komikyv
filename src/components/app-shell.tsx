@@ -50,6 +50,7 @@ import {
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 
@@ -384,7 +385,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Button>
         </header>
 
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="flex-1 min-w-0">
+          {user && !user.emailVerified && <EmailVerificationBanner />}
+          {children}
+        </main>
 
         {/* Footer */}
         <Footer />
