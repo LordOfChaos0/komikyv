@@ -9,6 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -17,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import {
   Users, Search, Shield, Zap, Flame, BookOpen, MessageCircle, ChevronLeft, ChevronRight,
+  KeyRound, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +34,13 @@ export function AdminUsersView() {
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
   const [page, setPage] = useState(1);
+
+  // Диалог результата сброса пароля (REC 4.2)
+  const [resetResult, setResetResult] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const queryParams = new URLSearchParams({ pageSize: "20", page: String(page) });
   if (q) queryParams.set("q", q);
@@ -45,6 +61,30 @@ export function AdminUsersView() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Ручной сброс пароля (REC 4.2)
+  const resetPasswordMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ password: string; email: string }>(`/api/admin/users/${id}/reset-password`, {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      setResetResult({ email: data.email, password: data.password });
+      setCopied(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const copyPassword = async () => {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.password);
+      setCopied(true);
+      toast.success("Пароль скопирован в буфер обмена");
+    } catch {
+      toast.error("Не удалось скопировать — выделите пароль вручную");
+    }
+  };
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-6">
@@ -124,6 +164,17 @@ export function AdminUsersView() {
                     </Select>
                     <Button
                       size="sm"
+                      variant="outline"
+                      onClick={() => resetPasswordMutation.mutate(u.id)}
+                      disabled={resetPasswordMutation.isPending}
+                      className="h-8"
+                      title="Сбросить пароль и получить новый"
+                    >
+                      <KeyRound className="h-3.5 w-3.5 mr-1" />
+                      {resetPasswordMutation.isPending ? "..." : "Пароль"}
+                    </Button>
+                    <Button
+                      size="sm"
                       variant={u.isActive ? "outline" : "default"}
                       onClick={() => updateMutation.mutate({ id: u.id, isActive: !u.isActive })}
                       disabled={updateMutation.isPending}
@@ -143,6 +194,33 @@ export function AdminUsersView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Диалог с результатом сброса пароля */}
+      <Dialog open={!!resetResult} onOpenChange={(o) => !o && setResetResult(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              Новый пароль
+            </DialogTitle>
+            <DialogDescription>
+              Пароль для <span className="font-medium text-foreground">{resetResult?.email}</span>{" "}
+              сброшен. Новый пароль показан только один раз — передайте его пользователю.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 p-3 rounded-lg bg-muted/60 border border-border font-mono text-sm tracking-wide break-all select-all">
+              {resetResult?.password}
+            </code>
+            <Button size="icon" variant="outline" onClick={copyPassword} title="Копировать">
+              {copied ? <Check className="h-4 w-4 text-chart-1" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResetResult(null)}>Готово</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination */}
       {data && data.totalPages > 1 && (

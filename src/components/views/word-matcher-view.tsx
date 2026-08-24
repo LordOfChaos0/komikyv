@@ -86,65 +86,81 @@ export function WordMatcherView() {
     setState("playing");
   }, [allWords]);
 
-  // Timer
+  // Timer: переход в finished — внутри колбэка setTimeout (async),
+  // чтобы не вызывать setState синхронно в теле effect
   useEffect(() => {
     if (state !== "playing") return;
-    if (timeLeft <= 0) {
-      setState("finished");
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    const timer = setTimeout(() => {
+      if (timeLeft <= 1) {
+        setState("finished");
+      } else {
+        setTimeLeft(timeLeft - 1);
+      }
+    }, 1000);
     return () => clearTimeout(timer);
   }, [state, timeLeft]);
 
-  // Check match when both selected
-  useEffect(() => {
-    if (selectedKomi && selectedRu) {
-      const pair = pairs.find((p) => p.vocabId === selectedKomi);
-      if (pair && pair.ru === selectedRu) {
-        // Correct match!
-        setPairs((prev) =>
-          prev.map((p) =>
-            p.vocabId === selectedKomi ? { ...p, matched: true } : p
-          )
-        );
-        setMatched((m) => m + 1);
-        setCombo((c) => c + 1);
-        const points = 10 + combo * 2;
-        setScore((s) => s + points);
-        toast.success(`+${points} XP! ${combo > 0 ? `Серия x${combo + 1}` : ""}`, { duration: 1500 });
+  // Проверка пары — вызывается из обработчиков кликов (не из effect)
+  const evaluateMatch = (komiId: string, ru: string) => {
+    const pair = pairs.find((p) => p.vocabId === komiId);
+    if (pair && pair.ru === ru) {
+      // Correct match!
+      setPairs((prev) =>
+        prev.map((p) =>
+          p.vocabId === komiId ? { ...p, matched: true } : p
+        )
+      );
+      const newMatched = matched + 1;
+      setMatched(newMatched);
+      setCombo((c) => c + 1);
+      const points = 10 + combo * 2;
+      setScore((s) => s + points);
+      toast.success(`+${points} XP! ${combo > 0 ? `Серия x${combo + 1}` : ""}`, { duration: 1500 });
+      setSelectedKomi(null);
+      setSelectedRu(null);
+      // Проверка победы: все пары найдены
+      if (newMatched === ROUND_SIZE) {
+        const timeBonus = timeLeft * 5;
+        setScore((s) => s + timeBonus);
+        toast.success(`🎉 Все пары найдены! +${timeBonus} бонус за время!`);
+        setState("finished");
+      }
+    } else {
+      // Wrong match
+      setPairs((prev) =>
+        prev.map((p) =>
+          p.vocabId === komiId || p.ru === ru
+            ? { ...p, wrong: true }
+            : p
+        )
+      );
+      setErrors((e) => e + 1);
+      setCombo(0);
+      setTimeout(() => {
+        setPairs((prev) => prev.map((p) => ({ ...p, wrong: false })));
         setSelectedKomi(null);
         setSelectedRu(null);
-      } else {
-        // Wrong match
-        setPairs((prev) =>
-          prev.map((p) =>
-            p.vocabId === selectedKomi || p.ru === selectedRu
-              ? { ...p, wrong: true }
-              : p
-          )
-        );
-        setErrors((e) => e + 1);
-        setCombo(0);
-        setTimeout(() => {
-          setPairs((prev) => prev.map((p) => ({ ...p, wrong: false })));
-          setSelectedKomi(null);
-          setSelectedRu(null);
-        }, 600);
-      }
+      }, 600);
     }
-  }, [selectedKomi, selectedRu, pairs, combo]);
+  };
 
-  // Check win
-  useEffect(() => {
-    if (state === "playing" && matched === ROUND_SIZE) {
-      // Bonus for remaining time
-      const timeBonus = timeLeft * 5;
-      setScore((s) => s + timeBonus);
-      toast.success(`🎉 Все пары найдены! +${timeBonus} бонус за время!`);
-      setState("finished");
+  const handleKomiClick = (pair: MatchPair) => {
+    if (pair.matched) return;
+    if (selectedRu) {
+      evaluateMatch(pair.vocabId, selectedRu);
+    } else {
+      setSelectedKomi(pair.vocabId);
     }
-  }, [matched, state, timeLeft]);
+  };
+
+  const handleRuClick = (pair: MatchPair) => {
+    if (pair.matched) return;
+    if (selectedKomi) {
+      evaluateMatch(selectedKomi, pair.ru);
+    } else {
+      setSelectedRu(pair.ru);
+    }
+  };
 
   // Shuffle the display order of komi and ru independently
   const komiOrder = useMemo(() => {
@@ -285,7 +301,7 @@ export function WordMatcherView() {
             <button
               key={pair.vocabId}
               disabled={pair.matched}
-              onClick={() => !pair.matched && setSelectedKomi(pair.vocabId)}
+              onClick={() => handleKomiClick(pair)}
               className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
                 pair.matched
                   ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"
@@ -311,7 +327,7 @@ export function WordMatcherView() {
             <button
               key={`${pair.vocabId}-${idx}`}
               disabled={pair.matched}
-              onClick={() => !pair.matched && setSelectedRu(pair.ru)}
+              onClick={() => handleRuClick(pair)}
               className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
                 pair.matched
                   ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"

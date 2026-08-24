@@ -100,7 +100,7 @@ export function GrammarView() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold group-hover:text-primary transition-colors">{s.title}</h3>
                       <Badge variant="outline" className="text-xs">
-                        {s.blocksCount} блок.
+                        {s.content.length} блок.
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2">{s.description}</p>

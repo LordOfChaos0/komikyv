@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNav } from "@/lib/nav-store";
 import { useAuth } from "@/lib/auth-store";
 import { apiFetch } from "@/lib/api-client";
@@ -8,8 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, LogIn, Mail, Lock } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Eye, EyeOff, LogIn, Mail, Lock, KeyRound, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 export function LoginView() {
@@ -20,6 +27,24 @@ export function LoginView() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Восстановление пароля (REC 1.1)
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"email" | "code">("email");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotPassword, setForgotPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [devCode, setDevCode] = useState<string | null>(null);
+
+  // OAuth-провайдеры (REC 1.1) — кнопка показывается,
+  // только если провайдер активирован env-переменными
+  const [oauthProviders, setOauthProviders] = useState<string[]>([]);
+  useEffect(() => {
+    apiFetch<{ providers: string[] }>("/api/auth/oauth/providers")
+      .then((d) => setOauthProviders(d.providers || []))
+      .catch(() => setOauthProviders([]));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +66,60 @@ export function LoginView() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // === Восстановление пароля ===
+  const openForgot = () => {
+    setForgotStep("email");
+    setForgotEmail(email || "");
+    setForgotCode("");
+    setForgotPassword("");
+    setDevCode(null);
+    setForgotOpen(true);
+  };
+
+  const submitForgotEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    try {
+      const data = await apiFetch<{ message: string; devCode?: string }>("/api/auth/forgot-password", {
+        method: "POST",
+        json: { email: forgotEmail },
+      });
+      if (data.devCode) {
+        setDevCode(data.devCode);
+        toast.info("SMTP не настроен — код показан ниже (dev-режим)");
+      } else {
+        toast.success("Код восстановления отправлен на email");
+      }
+      setForgotStep("code");
+    } catch (e: any) {
+      toast.error(e.message || "Не удалось отправить код");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const submitForgotCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    try {
+      await apiFetch("/api/auth/reset-password", {
+        method: "POST",
+        json: {
+          email: forgotEmail,
+          code: forgotCode,
+          newPassword: forgotPassword,
+        },
+      });
+      toast.success("Пароль изменён! Войдите с новым паролем.");
+      setForgotOpen(false);
+      setPassword("");
+    } catch (e: any) {
+      toast.error(e.message || "Не удалось изменить пароль");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -84,7 +163,16 @@ export function LoginView() {
               {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Пароль</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Пароль</Label>
+                <button
+                  type="button"
+                  onClick={openForgot}
+                  className="text-xs text-primary font-medium hover:underline"
+                >
+                  Забыли пароль?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -112,6 +200,33 @@ export function LoginView() {
               {loading ? "Вход..." : "Войти"}
             </Button>
           </form>
+
+          {/* OAuth (REC 1.1): кнопки появляются при активации провайдера */}
+          {oauthProviders.includes("yandex") && (
+            <>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">или</span>
+                </div>
+              </div>
+              <a
+                href="/api/auth/oauth/yandex"
+                className="flex items-center justify-center gap-2 w-full h-10 rounded-lg border border-border bg-card text-sm font-medium hover:bg-muted transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="11" fill="#FC3F1D" />
+                  <path
+                    d="M13.7 18.5v-2.2c.9-.6 1.5-1.7 1.5-3 0-2-1.5-3.6-3.4-3.6S8.5 11.3 8.5 13.3c0 1.3.6 2.4 1.5 3v2.2c-2.6-.8-4.5-3.2-4.5-6 0-3.5 2.8-6.3 6.3-6.3s6.3 2.8 6.3 6.3c0 2.8-1.9 5.2-4.4 6z"
+                    fill="#fff"
+                  />
+                </svg>
+                Войти через Яндекс
+              </a>
+            </>
+          )}
 
           <div className="mt-6 pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground text-center mb-3">
@@ -141,6 +256,101 @@ export function LoginView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Диалог восстановления пароля */}
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              {forgotStep === "email" ? "Восстановление пароля" : "Новый пароль"}
+            </DialogTitle>
+            <DialogDescription>
+              {forgotStep === "email"
+                ? "Введите email аккаунта — мы отправим код восстановления."
+                : `Введите код из письма для ${forgotEmail} и новый пароль.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {forgotStep === "email" ? (
+            <form onSubmit={submitForgotEmail} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="pl-9"
+                    placeholder="you@example.com"
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={forgotLoading}>
+                {forgotLoading ? "Отправка..." : "Отправить код"}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={submitForgotCode} className="space-y-4">
+              {devCode && (
+                <div className="p-3 rounded-lg bg-muted/60 border border-border text-sm">
+                  <span className="text-muted-foreground">Dev-код: </span>
+                  <span className="font-mono font-bold tracking-widest">{devCode}</span>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="forgot-code">Код из письма</Label>
+                <Input
+                  id="forgot-code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={forgotCode}
+                  onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  className="text-center font-mono text-lg tracking-[0.4em]"
+                  required
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="forgot-password">Новый пароль</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="forgot-password"
+                    type="password"
+                    value={forgotPassword}
+                    onChange={(e) => setForgotPassword(e.target.value)}
+                    className="pl-9"
+                    placeholder="Минимум 8 символов, буквы и цифры"
+                    minLength={8}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setForgotStep("email")}
+                  disabled={forgotLoading}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <Button type="submit" className="flex-1" disabled={forgotLoading}>
+                  {forgotLoading ? "Сохранение..." : "Изменить пароль"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

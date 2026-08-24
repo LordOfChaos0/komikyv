@@ -80,14 +80,17 @@ export function SpeedTypingView() {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [allWords]);
 
-  // Timer
+  // Timer: переход в finished — внутри колбэка setTimeout (async),
+  // чтобы не вызывать setState синхронно в теле effect
   useEffect(() => {
     if (state !== "playing") return;
-    if (timeLeft <= 0) {
-      setState("finished");
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    const timer = setTimeout(() => {
+      if (timeLeft <= 1) {
+        setState("finished");
+      } else {
+        setTimeLeft(timeLeft - 1);
+      }
+    }, 1000);
     return () => clearTimeout(timer);
   }, [state, timeLeft]);
 

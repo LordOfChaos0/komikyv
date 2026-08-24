@@ -121,7 +121,7 @@ export function PronunciationView() {
     try {
       const data = await apiFetch<{ transcript: string; accuracy: number; feedback: string }>("/api/asr", {
         method: "POST",
-        json: { audioBase64, target: currentWord.wordKomi },
+        json: { audioBase64: base64Audio, target: currentWord.wordKomi },
       });
       setResult({
         transcript: data.transcript,

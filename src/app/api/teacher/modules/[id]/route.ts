@@ -57,7 +57,6 @@ export async function PUT(
       const cats = await db.category.findMany({ where: { slug: { in: categories } } });
       await db.moduleCategory.createMany({
         data: cats.map((c) => ({ moduleId: id, categoryId: c.id })),
-        skipDuplicates: true,
       });
     }
   }
