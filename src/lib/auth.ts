@@ -28,9 +28,25 @@ export function verifyPassword(password: string, stored: string): boolean {
 // Stateless JWT (HMAC-SHA256) — no external deps
 // ============================================================
 
-const JWT_SECRET =
-  process.env.JWT_SECRET ||
-  "komi-kyv-dev-secret-change-in-production-please-32bytes";
+// JWT-секрет: в production обязательно переопределяется через env-переменную.
+// При отсутствии JWT_SECRET в production приложение падает на старте
+// (fail-fast), чтобы исключить подделку сессий по зашитому dev-секрету.
+const DEV_FALLBACK_SECRET = "komi-kyv-dev-secret-change-in-production-please-32bytes";
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length >= 32) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[auth] JWT_SECRET обязателен в production (минимум 32 символа). " +
+      "Сгенерируйте: openssl rand -hex 32 — и добавьте в .env"
+    );
+  }
+  if (secret) {
+    console.warn("[auth] JWT_SECRET короче 32 символов — используется с ослабленной стойкостью");
+    return secret;
+  }
+  return DEV_FALLBACK_SECRET;
+})();
 
 const JWT_ISSUER = "komi-kyv";
 const JWT_EXPIRES_SEC = 60 * 60 * 24 * 7; // 7 days
