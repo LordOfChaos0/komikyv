@@ -47,6 +47,17 @@ import {
   Sheet,
   SheetContent,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { KeyRound } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
@@ -148,6 +159,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState<string | null>(null);
+  const [adminTokenOpen, setAdminTokenOpen] = useState(false);
+
+  // Поиск со страницы 404: not-found.tsx кладёт запрос в sessionStorage,
+  // здесь открываем палитру с предзаполненным запросом (rAF — без
+  // синхронного setState в теле effect)
+  useEffect(() => {
+    const q = sessionStorage.getItem("komi_search");
+    if (q) {
+      sessionStorage.removeItem("komi_search");
+      const raf = requestAnimationFrame(() => {
+        setPaletteQuery(q);
+        setPaletteOpen(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, []);
+
+  // Сервер потребовал токен администратора (403 + x-admin-token-required)
+  useEffect(() => {
+    const handler = () => setAdminTokenOpen(true);
+    window.addEventListener("admin-token-required", handler);
+    return () => window.removeEventListener("admin-token-required", handler);
+  }, []);
 
   // Notifications unread count
   const { data: notifData } = useQuery({
@@ -394,9 +429,81 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Footer />
       </div>
 
-      {/* Command palette (Cmd+K) */}
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {/* Command palette (Cmd+K). key перемонтирует палитру при переходе
+          со страницы 404 с поисковым запросом — иначе useState(initialQuery)
+          захватывает пустую строку до срабатывания rAF */}
+      <CommandPalette
+        key={paletteQuery || "default"}
+        open={paletteOpen}
+        onOpenChange={(o: boolean) => {
+          setPaletteOpen(o);
+          if (!o) setPaletteQuery(null);
+        }}
+        initialQuery={paletteQuery || undefined}
+      />
+
+      {/* Диалог ввода токена администратора (REC 4.1) */}
+      <AdminTokenDialog open={adminTokenOpen} onOpenChange={setAdminTokenOpen} />
     </div>
+  );
+}
+
+function AdminTokenDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const [token, setToken] = useState("");
+
+  const save = () => {
+    if (!token.trim()) return;
+    window.localStorage.setItem("admin_token", token.trim());
+    onOpenChange(false);
+    setToken("");
+    toast.success("Токен сохранён. Повторите действие.");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-primary" />
+            Токен администратора
+          </DialogTitle>
+          <DialogDescription>
+            Доступ к панели администратора дополнительно защищён токеном.
+            Введите его, чтобы продолжить работу с разделом.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="admin-token">Токен доступа</Label>
+          <Input
+            id="admin-token"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder="Введите токен администратора"
+            autoComplete="off"
+          />
+          <p className="text-xs text-muted-foreground">
+            Токен задаётся переменной окружения ADMIN_ACCESS_TOKEN на сервере
+            и сохраняется только в этом браузере.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Отмена
+          </Button>
+          <Button onClick={save} disabled={!token.trim()}>
+            Сохранить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -418,6 +525,10 @@ function Footer() {
             <span>© {new Date().getFullYear()}</span>
             <span className="hidden sm:inline">·</span>
             <span>Сохраняем язык народа коми</span>
+            <span className="hidden sm:inline">·</span>
+            <a href="/api-docs" className="hover:text-primary transition-colors" title="Swagger/OpenAPI документация">
+              API
+            </a>
           </div>
         </div>
       </div>

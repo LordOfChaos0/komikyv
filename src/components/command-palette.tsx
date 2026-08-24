@@ -48,10 +48,18 @@ interface PaletteItem {
   keywords?: string;
 }
 
-export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  initialQuery,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  initialQuery?: string;
+}) {
   const { navigate } = useNav();
   const { user } = useAuth();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery || "");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -181,16 +189,16 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     return groups;
   }, [filteredItems]);
 
-  // Reset active index when query changes
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [query]);
+  // Сброс строки поиска при закрытии палитры и передача наружу
+  const handleOpenChange = (o: boolean) => {
+    if (!o) setQuery("");
+    onOpenChange(o);
+  };
 
   // Focus input when opened
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
-      setQuery("");
     }
   }, [open]);
 
@@ -200,7 +208,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     } else if (item.action) {
       item.action();
     }
-    onOpenChange(false);
+    handleOpenChange(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -216,7 +224,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         handleSelect(filteredItems[activeIdx]);
       }
     } else if (e.key === "Escape") {
-      onOpenChange(false);
+      handleOpenChange(false);
     }
   };
 
@@ -231,7 +239,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   let runningIdx = 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="p-0 gap-0 max-w-2xl overflow-hidden top-[20%] translate-y-0" >
         {/* Search input */}
         <div className="flex items-center border-b border-border px-4">
@@ -240,7 +248,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActiveIdx(0);
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Поиск по платформе... (модули, слова, грамматика)"
             className="flex-1 px-3 py-4 bg-transparent outline-none text-sm"
