@@ -147,10 +147,10 @@ export function ProfileView() {
             </div>
             <Progress value={
               user.profile?.level === "beginner"
-                ? Math.min(100, (user.profile.xp / 300) * 100)
+                ? Math.min(100, ((user.profile?.xp || 0) / 300) * 100)
                 : user.profile?.level === "intermediate"
-                ? Math.min(100, ((user.profile.xp - 300) / 900) * 100)
-                : Math.min(100, ((user.profile.xp - 1200) / 3800) * 100)
+                ? Math.min(100, (((user.profile?.xp || 0) - 300) / 900) * 100)
+                : Math.min(100, (((user.profile?.xp || 0) - 1200) / 3800) * 100)
             } className="h-2.5" />
             <div className="flex justify-between text-xs text-muted-foreground mt-1">
               <span>Начальный</span>

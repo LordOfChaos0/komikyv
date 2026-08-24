@@ -53,7 +53,7 @@ function LessonPlayer({ lessonId }: { lessonId: string }) {
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, { answer: string; isCorrect: boolean; checked: boolean }>>({});
+  const [answers, setAnswers] = useState<Record<string, { answer: string; isCorrect: boolean; checked: boolean; correctAnswer?: string }>>({});
   const [showHint, setShowHint] = useState<Record<string, boolean>>({});
   const [showTheory, setShowTheory] = useState(true);
   const [resultDialog, setResultDialog] = useState<any>(null);

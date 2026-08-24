@@ -18,7 +18,7 @@ async function checkAccess(vocabId: string, userId: string, role: string) {
     include: { lesson: { include: { module: true } } },
   });
   if (!v) return { error: "Слово не найдено", status: 404 };
-  if (role === "teacher" && v.lesson.module.authorId !== userId) {
+  if (role === "teacher" && v.lesson?.module?.authorId !== userId) {
     return { error: "Нет доступа", status: 403 };
   }
   return { v };

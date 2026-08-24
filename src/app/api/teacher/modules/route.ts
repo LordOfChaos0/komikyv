@@ -52,7 +52,6 @@ export async function POST(req: NextRequest) {
     const cats = await db.category.findMany({ where: { slug: { in: categories } } });
     await db.moduleCategory.createMany({
       data: cats.map((c) => ({ moduleId: newModule.id, categoryId: c.id })),
-      skipDuplicates: true,
     });
   }
 

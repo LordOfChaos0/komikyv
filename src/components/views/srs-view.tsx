@@ -44,11 +44,11 @@ interface SrsCard {
 }
 
 const QUALITY_OPTIONS = [
-  { value: 0, label: "Забыл", color: "chart-3", icon: "XCircle" },
-  { value: 2, label: "Почти", color: "chart-3", icon: "AlertCircle" },
-  { value: 3, label: "Трудно", color: "chart-2", icon: "Meh" },
-  { value: 4, label: "Ок", color: "chart-1", icon: "Check" },
-  { value: 5, label: "Легко", color: "chart-1", icon: "Sparkles" },
+  { value: 0, label: "Забыл", short: "Забыл", color: "chart-3", icon: "XCircle" },
+  { value: 2, label: "Почти", short: "Почти", color: "chart-3", icon: "AlertCircle" },
+  { value: 3, label: "Трудно", short: "Трудно", color: "chart-2", icon: "Meh" },
+  { value: 4, label: "Ок", short: "Ок", color: "chart-1", icon: "Check" },
+  { value: 5, label: "Легко", short: "Легко", color: "chart-1", icon: "Sparkles" },
 ];
 
 export function SrsView() {
