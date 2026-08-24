@@ -55,3 +55,4 @@ server.log
 # prisma cache + npm artifacts (проект использует bun)
 cache/
 package-lock.json
+.github/
