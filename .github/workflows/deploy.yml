@@ -1,0 +1,53 @@
+name: Deploy
+
+# ============================================================
+# Автоматический деплой на VPS при пуше в main (REC 5.2).
+#
+# Перед включением задайте в GitHub repository secrets:
+#   SSH_HOST      — адрес сервера (например, komikyv.ru)
+#   SSH_USER      — пользователь (например, deploy)
+#   SSH_PRIVATE_KEY — приватный SSH-ключ
+#   SSH_PATH      — путь к проекту на сервере (например, /var/www/komikyv)
+#
+# На сервере должен быть установлен bun, а Caddy (Caddyfile
+# уже в репозитории) проксирует HTTPS-трафик на :3000.
+# ============================================================
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # ручной запуск из GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.SSH_PATH }}
+
+            echo ">>> Pull latest code"
+            git pull origin main
+
+            echo ">>> Install dependencies"
+            bun install
+
+            echo ">>> Generate Prisma client"
+            bunx prisma generate
+
+            echo ">>> Production build"
+            bun run build
+
+            echo ">>> Restart application (systemd)"
+            sudo systemctl restart komikyv || pm2 restart komikyv
+
+            echo ">>> Deploy complete"
