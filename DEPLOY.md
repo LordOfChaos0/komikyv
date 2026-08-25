@@ -88,7 +88,7 @@ cp .env.example .env
 | `ALLOWED_ORIGINS` | нет | Кросс-доменные origin через запятую (для API-доступа извне) |
 | `SMTP_HOST/PORT/USER/PASS/FROM` | нет | Яндекс SMTP: восстановление пароля и подтверждение email |
 | `YANDEX_CLIENT_ID/SECRET` | нет | OAuth-вход через Яндекс ID |
-| `APP_URL` | нет | `https://ваш-домен` — для OAuth redirect URI |
+| `APP_URL` | нет | `https://комикыв.рф` — для OAuth redirect URI (в punycode: https://xn--b1alfbil8g.xn--p1ai) |
 
 Минимальный `.env` для теста:
 
@@ -168,14 +168,19 @@ sudo apt update && sudo apt install -y caddy
 
 ### 6.2. Конфигурация
 
-> В репозитории лежит `Caddyfile` для песочницы (порт :81).
-> Для VM замените его на вариант ниже.
+Готовый `Caddyfile` для домена **комикыв.рф** уже лежит в корне репозитория:
 
-С доменом (автоматический HTTPS):
+```bash
+sudo cp ~/komikyv/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Ручной вариант (если нужно):
 
 ```bash
 sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
-ваш-домен.ru {
+комикыв.рф {
+    encode gzip zstd
     reverse_proxy localhost:3000 {
         header_up Host {host}
         header_up X-Forwarded-For {remote_host}
@@ -186,6 +191,19 @@ sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
 EOF
 sudo systemctl reload caddy
 ```
+
+> Кириллический домен в Caddyfile можно писать кириллицей — Caddy
+> сам преобразует в punycode (`комикыв.рф` → `xn--b1alfbil8g.xn--p1ai`).
+
+**Требования для выпуска сертификата Let's Encrypt:**
+
+1. A-запись DNS: `комикыв.рф` → IP сервера
+2. Порты 80 и 443 открыты в файрволе и свободны (никаких nginx/apache)
+3. Caddy запущен от имени пользователя с правами на 80/443
+
+Caddy автоматически получит сертификат при первом обращении
+> (проверка HTTP-01). Процесс занимает ~10 секунд после
+> корректной DNS-записи. Сертификаты продлеваются автоматически.
 
 Только по IP, без домена (самоподписанный сертификат — для чистого теста):
 
@@ -213,7 +231,7 @@ sudo ufw enable
 sudo ufw status
 ```
 
-Приложение доступно по `https://ваш-домен.ru` (или `http://<IP>`).
+Приложение доступно по **`https://комикыв.рф`** (или `http://<IP>` для теста).
 
 ---
 
@@ -221,12 +239,12 @@ sudo ufw status
 
 | Что проверяем | Как |
 |---------------|-----|
-| Приложение живо | `curl -I https://ваш-домен.ru` → HTTP 200 |
-| Security-заголовки | `curl -I https://ваш-домен.ru` → CSP, HSTS, X-Frame-Options |
-| API-документация | Открыть `https://ваш-домен.ru/api-docs` — Swagger UI |
+| Приложение живо | `curl -I https://комикыв.рф` → HTTP 200 |
+| Security-заголовки | `curl -I https://комикыв.рф` → CSP, HSTS, X-Frame-Options |
+| API-документация | Открыть `https://комикыв.рф/api-docs` — Swagger UI |
 | Логин | `student@komikyv.ru` / `Student123!` |
 | Админка | `admin@komikyv.ru` / `Admin123!` |
-| Страница 404 | `https://ваш-домен.ru/абракадабра` — «Страница не найдена» |
+| Страница 404 | `https://комикыв.рф/абракадабра` — «Страница не найдена» |
 | Rate limit | 6 неудачных логинов подряд → 429 |
 | CSRF | POST без заголовка X-CSRF-Token → 403 |
 

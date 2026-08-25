@@ -1,23 +1,50 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
+# ============================================================
+# «Коми кыв» — конфигурация Caddy для продакшн-домена
+#
+# Домен: комикыв.рф (punycode: xn--b1alfbil8g.xn--p1ai)
+#
+# Caddy автоматически получает и продлевает SSL-сертификат
+# Let's Encrypt при корректной A-записи DNS на этот сервер.
+#
+# Установка на сервере:
+#   sudo cp Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Важно: 80/443 должны быть свободны (никаких nginx/apache)
+# и открыты в файрволе: ufw allow 80,443/tcp
+# ============================================================
+
+комикыв.рф {
+	encode gzip zstd
+
+	# Проксирование на Next.js standalone
+	reverse_proxy localhost:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
 	}
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+	# Статика Next.js кэшируется агрессивно
+	@static path /_next/static/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
+	# Кэш Swagger-ассетов
+	@swagger path /swagger-ui/*
+	header @swagger Cache-Control "public, max-age=86400"
+
+	# Базовые security-заголовки дублируются здесь на случай,
+	# если приложение обслуживается и без прокси
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 }
+
+# Редирект www-варианта и punycode-алиаса на основной домен
+# (раскомментируйте, если создадите такие DNS-записи)
+# www.комикыв.рф, xn--b1alfbil8g.xn--p1ai {
+# 	redir https://комикыв.рф{uri} permanent
+# }

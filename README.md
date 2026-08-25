@@ -78,6 +78,9 @@ node server.js
 
 ## Развёртывание
 
+Платформа развёрнута на домене **[комикыв.рф](https://комикыв.рф)**
+(punycode: `xn--b1alfbil8g.xn--p1ai`).
+
 Пошаговое руководство по установке на VM (Ubuntu), systemd, Caddy/HTTPS
 и настройке авто-деплоя — в [DEPLOY.md](./DEPLOY.md).
 
