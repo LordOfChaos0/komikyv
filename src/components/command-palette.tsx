@@ -18,6 +18,7 @@ import {
   BarChart3,
   Trophy,
   Users,
+  Database,
   User as UserIcon,
   GraduationCap,
   Shield,
@@ -32,7 +33,6 @@ import {
   CornerDownLeft,
   CornerUpLeft,
 } from "lucide-react";
-import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PaletteItem {
@@ -118,6 +118,7 @@ export function CommandPalette({
         { id: "nav-admin-dash", label: "Админ-дашборд", icon: Shield, group: "navigation", view: "admin-dashboard" },
         { id: "nav-admin-mod", label: "Модерация", icon: Award, group: "navigation", view: "admin-moderation" },
         { id: "nav-admin-users", label: "Пользователи", icon: Users, group: "navigation", view: "admin-users" },
+        { id: "nav-admin-db", label: "База данных", icon: Database, group: "navigation", view: "admin-db", roles: ["admin"] },
       );
     }
 

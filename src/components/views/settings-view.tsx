@@ -34,6 +34,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SecurityCard } from "@/components/views/security-card";
 
 interface Settings {
   theme: "light" | "dark";
@@ -152,6 +153,9 @@ export function SettingsView() {
           Персонализируйте платформу под свой стиль обучения
         </p>
       </div>
+
+      {/* Безопасность: двухфакторная аутентификация (TOTP) */}
+      <SecurityCard />
 
       {/* Appearance */}
       <Card>

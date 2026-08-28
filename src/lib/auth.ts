@@ -56,6 +56,17 @@ export interface JWTPayload {
   email: string;
   role: string;
   name?: string | null;
+  twofa?: boolean; // сессия подтверждена вторым фактором (TOTP)
+  typ?: string; // "session" | "2fa_pending" (токен-вызов для второго шага входа)
+  iat: number;
+  exp: number;
+  iss: string;
+}
+
+export interface ChallengePayload {
+  sub: string;
+  email: string;
+  typ: "2fa_pending";
   iat: number;
   exp: number;
   iss: string;
@@ -97,6 +108,51 @@ export function verifyToken(token: string): JWTPayload | null {
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) return null;
     if (payload.iss !== JWT_ISSUER) return null;
+    // Токены-вызовы (2fa_pending) нельзя использовать как сессии
+    if (payload.typ && payload.typ !== "session") return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// Токен-вызов для второго шага входа (2FA)
+// ============================================================
+
+const CHALLENGE_TTL_SEC = 5 * 60; // 5 минут на ввод кода
+
+/** Короткоживущий токен: пароль проверен, ждём код TOTP. */
+export function signChallengeToken(userId: string, email: string): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: ChallengePayload = {
+    sub: userId,
+    email,
+    typ: "2fa_pending",
+    iss: JWT_ISSUER,
+    iat: now,
+    exp: now + CHALLENGE_TTL_SEC,
+  };
+  const header = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const data = `${header}.${body}`;
+  const sig = createHmac("sha256", JWT_SECRET).update(data).digest();
+  return `${data}.${sig.toString("base64url")}`;
+}
+
+export function verifyChallengeToken(token: string): ChallengePayload | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [header, body, sig] = parts;
+    const expectedSig = createHmac("sha256", JWT_SECRET)
+      .update(`${header}.${body}`)
+      .digest("base64url");
+    if (sig !== expectedSig) return null;
+    const payload = JSON.parse(base64UrlDecode(body).toString("utf8")) as ChallengePayload;
+    if (payload.typ !== "2fa_pending") return null;
+    if (payload.iss !== JWT_ISSUER) return null;
+    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
     return null;
@@ -161,6 +217,38 @@ export async function requireRole(...roles: string[]): Promise<SessionUser> {
   const u = await requireUser();
   if (!roles.includes(u.role)) throw new Error("FORBIDDEN");
   return u;
+}
+
+// ============================================================
+// Guard для чувствительных админ-операций (редактор БД)
+// Требует роль admin И активную 2FA-сессию (twofa: true в JWT)
+// ============================================================
+
+export type Admin2FACheck =
+  | { ok: true; user: SessionUser }
+  | { ok: false; code: "UNAUTHORIZED" | "FORBIDDEN" | "TWOFA_SETUP_REQUIRED" | "TWOFA_REQUIRED"; status: number };
+
+export async function requireAdmin2FA(): Promise<Admin2FACheck> {
+  const token = await getSessionToken();
+  if (!token) return { ok: false, code: "UNAUTHORIZED", status: 401 };
+  const payload = verifyToken(token);
+  if (!payload) return { ok: false, code: "UNAUTHORIZED", status: 401 };
+  const user = await db.user.findFirst({
+    where: { id: payload.sub, deletedAt: null },
+    select: { id: true, email: true, role: true, fullName: true, isActive: true, totpEnabled: true },
+  });
+  if (!user || !user.isActive) return { ok: false, code: "UNAUTHORIZED", status: 401 };
+  if (user.role !== "admin") return { ok: false, code: "FORBIDDEN", status: 403 };
+  if (!user.totpEnabled) {
+    // Администратор ещё не включил 2FA — редактор БД недоступен,
+    // пока она не будет настроена (Настройки → Безопасность)
+    return { ok: false, code: "TWOFA_SETUP_REQUIRED", status: 403 };
+  }
+  if (payload.twofa !== true) {
+    // 2FA включена, но текущая сессия входила без второго фактора
+    return { ok: false, code: "TWOFA_REQUIRED", status: 401 };
+  }
+  return { ok: true, user };
 }
 
 // ============================================================
