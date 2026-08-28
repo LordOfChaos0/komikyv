@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Eye, EyeOff, LogIn, Mail, Lock, KeyRound, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, LogIn, Mail, Lock, KeyRound, ArrowLeft, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export function LoginView() {
@@ -27,6 +27,11 @@ export function LoginView() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Второй фактор (2FA): шаг ввода кода из приложения-аутентификатора
+  const [twoFA, setTwoFA] = useState<{ challengeToken: string; email: string } | null>(null);
+  const [twoFACode, setTwoFACode] = useState("");
+  const [twoFALoading, setTwoFALoading] = useState(false);
 
   // Восстановление пароля (REC 1.1)
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -51,10 +56,20 @@ export function LoginView() {
     setErrors({});
     setLoading(true);
     try {
-      const data = await apiFetch<{ user: any }>("/api/auth/login", {
+      const data = await apiFetch<{
+        user: any;
+        requires2FA?: boolean;
+        challengeToken?: string;
+      }>("/api/auth/login", {
         method: "POST",
         json: { email, password },
       });
+      if (data.requires2FA && data.challengeToken) {
+        // Пароль верный — ждём код из приложения-аутентификатора
+        setTwoFA({ challengeToken: data.challengeToken, email });
+        setTwoFACode("");
+        return;
+      }
       toast.success(`Добро пожаловать, ${data.user.fullName || data.user.email}!`);
       await refresh();
       navigate("home");
@@ -66,6 +81,27 @@ export function LoginView() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Второй шаг входа: код TOTP из приложения-аутентификатора
+  const submit2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFA) return;
+    setTwoFALoading(true);
+    try {
+      const data = await apiFetch<{ user: any }>("/api/auth/login", {
+        method: "POST",
+        json: { challengeToken: twoFA.challengeToken, code: twoFACode },
+      });
+      toast.success(`Добро пожаловать, ${data.user.fullName || data.user.email}!`);
+      setTwoFA(null);
+      await refresh();
+      navigate("home");
+    } catch (e: any) {
+      toast.error(e.message || "Неверный код");
+    } finally {
+      setTwoFALoading(false);
     }
   };
 
@@ -135,6 +171,48 @@ export function LoginView() {
           <CardDescription>Войдите, чтобы продолжить обучение</CardDescription>
         </CardHeader>
         <CardContent>
+          {twoFA ? (
+            /* Шаг 2: код из приложения-аутентификатора */
+            <form onSubmit={submit2FA} className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/60 border border-border">
+                <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium">Двухфакторная аутентификация</p>
+                  <p className="text-muted-foreground">
+                    Введите 6-значный код из приложения для {twoFA.email}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="totp-code">Код аутентификатора</Label>
+                <Input
+                  id="totp-code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={twoFACode}
+                  onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  className="text-center font-mono text-lg tracking-[0.4em]"
+                  autoFocus
+                  required
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={twoFALoading || twoFACode.length !== 6}>
+                {twoFALoading ? "Проверка..." : "Подтвердить вход"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => { setTwoFA(null); setTwoFACode(""); }}
+                disabled={twoFALoading}
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" /> Другой аккаунт
+              </Button>
+            </form>
+          ) : (
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -191,6 +269,7 @@ export function LoginView() {
               {loading ? "Вход..." : "Войти"}
             </Button>
           </form>
+          )}
 
           {/* OAuth (REC 1.1): кнопки появляются при активации провайдера */}
           {oauthProviders.includes("yandex") && (

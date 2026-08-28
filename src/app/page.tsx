@@ -38,6 +38,7 @@ import { TeacherAnalyticsView } from "@/components/views/teacher/teacher-analyti
 import { AdminDashboardView } from "@/components/views/admin/admin-dashboard-view";
 import { AdminModerationView } from "@/components/views/admin/admin-moderation-view";
 import { AdminUsersView } from "@/components/views/admin/admin-users-view";
+import { AdminDbView } from "@/components/views/admin/admin-db-view";
 import { AboutView } from "@/components/views/about-view";
 import { Loader2 } from "lucide-react";
 
@@ -56,7 +57,7 @@ export default function Home() {
   }
 
   // Protected views
-  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "word-scramble", "speed-typing", "memory-cards", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users"];
+  const protectedViews = ["lesson", "dialog", "dialog-history", "flashcards", "srs", "word-matcher", "word-scramble", "speed-typing", "memory-cards", "pronunciation", "listening", "favorites", "notifications", "settings", "quiz", "teacher-analytics", "progress", "achievements", "leaderboard", "profile", "teacher-modules", "teacher-module-edit", "admin-dashboard", "admin-moderation", "admin-users", "admin-db"];
   if (protectedViews.includes(view) && !user) {
     return (
       <AppShell>
@@ -72,6 +73,7 @@ export default function Home() {
     "admin-dashboard": ["admin"],
     "admin-moderation": ["admin"],
     "admin-users": ["admin"],
+    "admin-db": ["admin"],
   };
   const restricted = roleRestricted[view];
   if (restricted && (!user || !restricted.includes(user.role))) {
@@ -188,6 +190,9 @@ export default function Home() {
       break;
     case "admin-users":
       content = <AdminUsersView />;
+      break;
+    case "admin-db":
+      content = <AdminDbView />;
       break;
     case "about":
       content = <AboutView />;
