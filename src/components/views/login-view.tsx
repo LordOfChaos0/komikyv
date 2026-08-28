@@ -123,15 +123,6 @@ export function LoginView() {
     }
   };
 
-  const fillDemo = (role: "student" | "teacher" | "admin") => {
-    const creds = {
-      student: { email: "student@komikyv.ru", password: "Student123!" },
-      teacher: { email: "teacher@komikyv.ru", password: "Teacher123!" },
-      admin: { email: "admin@komikyv.ru", password: "Admin123!" },
-    };
-    setEmail(creds[role].email);
-    setPassword(creds[role].password);
-  };
 
   return (
     <div className="mx-auto max-w-md px-4 py-10 sm:py-16">
@@ -227,23 +218,6 @@ export function LoginView() {
               </a>
             </>
           )}
-
-          <div className="mt-6 pt-4 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center mb-3">
-              Быстрый вход под демо-аккаунтом:
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <Button size="sm" variant="outline" onClick={() => fillDemo("student")}>
-                Ученик
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => fillDemo("teacher")}>
-                Препод.
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => fillDemo("admin")}>
-                Админ
-              </Button>
-            </div>
-          </div>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Нет аккаунта?{" "}
