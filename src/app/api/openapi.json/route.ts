@@ -39,6 +39,7 @@ export async function GET() {
     servers: [{ url: "/", description: "Текущий хост" }],
     tags: [
       { name: "Auth", description: "Аутентификация, регистрация, восстановление пароля, OAuth" },
+      { name: "2FA", description: "Двухфакторная аутентификация (TOTP, RFC 6238)" },
       { name: "OAuth", description: "Вход через внешние сервисы (Яндекс ID)" },
       { name: "Modules", description: "Учебные модули и каталог" },
       { name: "Lessons", description: "Уроки и упражнения" },
@@ -171,24 +172,89 @@ export async function GET() {
       "/api/auth/login": {
         post: {
           tags: ["Auth"],
-          summary: "Вход по email и паролю",
-          description: "Проверяет учётные данные, выдаёт JWT в httpOnly cookie. Rate limit: 5 запросов/мин с IP.",
+          summary: "Вход по email и паролю (два шага при включённой 2FA)",
+          description: "Проверяет учётные данные, выдаёт JWT в httpOnly cookie. Rate limit: 5 запросов/мин с IP. " +
+            "Если у пользователя включена 2FA, первый вызов возвращает challengeToken (5 минут), " +
+            "второй вызов с challengeToken и 6-значным кодом TOTP устанавливает полноценную сессию (claim twofa).",
           requestBody: {
             required: true,
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["email", "password"],
                   properties: {
                     email: { type: "string", format: "email" },
+                    password: { type: "string" },
+                    challengeToken: { type: "string", description: "Токен второго шага 2FA" },
+                    code: { type: "string", description: "6-значный код из приложения-аутентификатора" },
+                  },
+                },
+              },
+            },
+          },
+          responses: { ...ok("JWT-сессия установлена / challengeToken для шага 2FA"), ...errs(400, 401, 403, 429) },
+        },
+      },
+      "/api/auth/2fa/status": {
+        get: {
+          tags: ["2FA"],
+          summary: "Статус двухфакторной аутентификации",
+          security: auth,
+          responses: { ...ok("{enabled: boolean, hasSecret: boolean}"), ...errs(401) },
+        },
+      },
+      "/api/auth/2fa/setup": {
+        post: {
+          tags: ["2FA"],
+          summary: "Начать привязку TOTP-аутентификатора",
+          description: "Генерирует секрет base32 (RFC 4648) и возвращает otpauth-URI, QR-код (SVG) и секрет для ручного ввода. " +
+            "Секрет не активен, пока не подтверждён кодом через /api/auth/2fa/enable. Rate limit: 3 запроса/мин.",
+          security: auth,
+          responses: { ...ok("{secret, otpauthUrl, qrSvg}"), ...errs(401, 429) },
+        },
+      },
+      "/api/auth/2fa/enable": {
+        post: {
+          tags: ["2FA"],
+          summary: "Подтвердить и включить 2FA",
+          description: "Проверяет 6-значный код (окно ±30 с, защита от повтора кода) и активирует 2FA; текущая сессия обновляется с признаком twofa. Rate limit: 5 запросов/мин.",
+          security: auth,
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["code"],
+                  properties: { code: { type: "string", minLength: 6, maxLength: 6 } },
+                },
+              },
+            },
+          },
+          responses: { ...ok("2FA включена, сессия повышена"), ...errs(400, 401, 429) },
+        },
+      },
+      "/api/auth/2fa/disable": {
+        post: {
+          tags: ["2FA"],
+          summary: "Отключить 2FA",
+          description: "Требуется действующий код аутентификатора либо пароль учётной записи. Rate limit: 5 запросов/мин.",
+          security: auth,
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    code: { type: "string", minLength: 6, maxLength: 6 },
                     password: { type: "string" },
                   },
                 },
               },
             },
           },
-          responses: { ...ok("JWT-сессия установлена"), ...errs(400, 401, 403, 429) },
+          responses: { ...ok("2FA отключена"), ...errs(400, 401, 403, 429) },
         },
       },
       "/api/auth/logout": {
@@ -823,6 +889,78 @@ export async function GET() {
             },
           },
           responses: { ...ok("Статус модуля обновлён, ModerationLog записан"), ...errs(400, 401, 403, 404) },
+        },
+      },
+      "/api/admin/db": {
+        get: {
+          tags: ["Admin"],
+          summary: "Реестр моделей редактора базы данных",
+          description: "Метаданные всех 20 таблиц (из DMMF Prisma): поля с типами, ключи, счётчики записей, признаки только-чтение и мягкого удаления. Требуется административная роль и активная 2FA-сессия.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          responses: { ...ok("{models: [20 таблиц с метаданными и счётчиками]}"), ...errs(401, 403) },
+        },
+      },
+      "/api/admin/db/{model}": {
+        get: {
+          tags: ["Admin"],
+          summary: "Список записей таблицы",
+          description: "Постраничная выборка с поиском и сортировкой; секретные поля (passwordHash, totpSecret, коды подтверждения) маскируются. Требуется 2FA-сессия администратора.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [
+            { name: "model", in: "path", required: true, schema: { type: "string" }, description: "Имя модели Prisma (например User)" },
+            { name: "q", in: "query", schema: { type: "string" }, description: "Поиск по текстовым полям" },
+            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+            { name: "pageSize", in: "query", schema: { type: "integer", default: 20, maximum: 100 } },
+            { name: "sort", in: "query", schema: { type: "string" }, description: "Поле сортировки" },
+            { name: "dir", in: "query", schema: { type: "string", enum: ["asc", "desc"] } },
+            { name: "deleted", in: "query", schema: { type: "string", enum: ["hide", "only", "all"] }, description: "Фильтр мягко удалённых записей" },
+          ],
+          responses: { ...ok("Paginated записи таблицы"), ...errs(401, 403, 404) },
+        },
+        post: {
+          tags: ["Admin"],
+          summary: "Создать запись в таблице",
+          description: "Тело запроса — поля записи по метаданным модели (типы coerсятся, JSON-поля валидируются). Пароль при создании User генерируется автоматически и возвращается один раз. Действие фиксируется в AuditLog. Требуется 2FA-сессия администратора.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [
+            { name: "model", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: { ...ok("Созданная запись"), ...errs(400, 401, 403, 404) },
+        },
+      },
+      "/api/admin/db/{model}/{id}": {
+        get: {
+          tags: ["Admin"],
+          summary: "Получить запись по идентификатору",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [
+            { name: "model", in: "path", required: true, schema: { type: "string" } },
+            { name: "id", in: "path", required: true, schema: { type: "string" }, description: "Идентификатор записи; составной ключ передаётся через двойное подчёркивание" },
+          ],
+          responses: { ...ok("Запись с маскированными секретами"), ...errs(401, 403, 404) },
+        },
+        put: {
+          tags: ["Admin"],
+          summary: "Изменить запись",
+          description: "Частичное обновление полей; передача deletedAt=null восстанавливает мягко удалённую запись. Действие фиксируется в AuditLog. Требуется 2FA-сессия администратора.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [
+            { name: "model", in: "path", required: true, schema: { type: "string" } },
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: { ...ok("Обновлённая запись"), ...errs(400, 401, 403, 404) },
+        },
+        delete: {
+          tags: ["Admin"],
+          summary: "Удалить запись (мягко или безвозвратно)",
+          description: "По умолчанию — мягкое удаление (deletedAt=сейчас); параметр hard=1 удаляет строку физически. Журналы (AuditLog, AuthLog, ModerationLog) доступны только для чтения. Действие фиксируется в AuditLog. Требуется 2FA-сессия администратора.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [
+            { name: "model", in: "path", required: true, schema: { type: "string" } },
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            { name: "hard", in: "query", schema: { type: "string", enum: ["1"] }, description: "1 — безвозвратное удаление" },
+          ],
+          responses: { ...ok("Запись удалена"), ...errs(400, 401, 403, 404) },
         },
       },
 

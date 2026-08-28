@@ -38,6 +38,7 @@ export type ViewName =
   | "admin-dashboard"
   | "admin-moderation"
   | "admin-users"
+  | "admin-db"
   | "about";
 
 interface NavState {
