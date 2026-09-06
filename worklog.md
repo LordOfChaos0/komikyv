@@ -724,3 +724,23 @@ Stage Summary:
 - ✅ Lint clean, no TypeScript errors.
 - ✅ End-to-end folktales tested: 5 tales displayed → expand first → full text + moral + characters + vocabulary shown.
 - Next: continue with more content, PWA support, export/import, additional features.
+
+---
+Task ID: 12
+Agent: Main (Super Z orchestrator)
+Task: Удаление аккаунта (пользователем и админом), уведомление о сборе cookie, аудит SRS-критериев
+
+Work Log:
+- DELETE /api/auth/account: самоудаление с подтверждением паролем (Zod: password + confirmed), soft delete + анонимизация 152-ФЗ (email→deleted-{id}@removed.komikyv.local, fullName→null, passwordHash/2FA-секреты затираются, pdConsent отзывается), транзакция $transaction, AuthLog failed при неверном пароле, AuditLog action=self_delete, сессия очищается. Rate limit 3/мин добавлен в proxy.ts.
+- DELETE /api/admin/users/[id]: удаление админом с reason (до 500 симв.), guard'ы: нельзя удалить себя (400), нельзя удалить последнего активного админа (400), 404 для отсутствующих, requireRole("admin"). AuditLog action=delete со old/new values.
+- UI: карточка «Удаление аккаунта» (danger-zone) внизу настроек — описание последствий, AlertDialog с паролем + чекбоксом необратимости, inline-ошибка при 401, redirect на главную с setUser(null).
+- UI: кнопка «Удалить» (destructive) в admin-users-view для каждого пользователя (disabled для себя), AlertDialog с описанием анонимизации, invalidateQueries admin-users/admin-dashboard.
+- CookieConsentBanner: фиксированный баннер снизу (fixed bottom-0, z-40), localStorage komi_cookie_consent (accepted|necessary) + дата, кнопки «Принять все»/«Только необходимые», ссылка на about (152-ФЗ), появление через 600 мс, скрытие до следующего решения, доступность (role=dialog, aria-label). Встроен в AppShell после Footer.
+- OpenAPI: /api/auth/account (delete) и /api/admin/users/{id} (delete) — теперь 85 операций.
+- README: возможности (удаление аккаунта, cookie-баннер), безопасность (152-ФЗ), счётчик операций.
+- Тесты (scripts/test-delete-apis.sh, не в репо): 10/10 PASS — 401 без сессии, 403 без CSRF, 429 rate limit, 400 Zod (без пароля/подтверждения), 401 неверный пароль, 400 самоудаление админа, 404, 403 студент/гость.
+- agent-browser E2E: куки-баннер показывается/принимается (desktop + 320px mobile), настройки → удаление аккаунта (dialog, неверный пароль → ошибка), админ удаляет victim-пользователя (список обновился, БД: deletedAt+анонимизация+AuditLog), самоудаление selfdelete-пользователя (сессия завершена, гость, БД анонимизирована). Скриншоты в download/screenshots/.
+- db/custom.db восстановлен из git перед коммитом (тестовые записи убраны).
+
+Stage Summary:
+- 2 новых API-маршрута, 2 новых компонента, 4 обновлённых файла; безопасность: CSRF/rate-limit/RBAC на новых эндпоинтах; 152-ФЗ-соответствие закрыто (согласие при регистрации, cookie-баннер, удаление ПД).

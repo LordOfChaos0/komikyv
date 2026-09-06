@@ -56,3 +56,9 @@ server.log
 cache/
 package-lock.json
 .github/
+
+# Sandbox artifacts (not part of the product)
+download/
+scripts/
+dev.log
+dev.out.log
