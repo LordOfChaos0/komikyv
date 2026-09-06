@@ -63,6 +63,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { CookieConsentBanner } from "@/components/cookie-banner";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 
@@ -429,6 +430,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <Footer />
+
+        {/* Баннер согласия на cookie (до первого решения) */}
+        <CookieConsentBanner />
       </div>
 
       {/* Command palette (Cmd+K). key перемонтирует палитру при переходе
