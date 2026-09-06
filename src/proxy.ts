@@ -22,6 +22,9 @@ const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   "/api/auth/resend-verification": { limit: 3, windowMs: 60_000 },
   "/api/auth/2fa/enable": { limit: 5, windowMs: 60_000 },
   "/api/auth/2fa/disable": { limit: 5, windowMs: 60_000 },
+  // Удаление аккаунта — не чаще 3 раз в минуту (защита от брутфорса
+  // пароля подтверждения через эндпоинт удаления)
+  "/api/auth/account": { limit: 3, windowMs: 60_000 },
 };
 
 // In-memory sliding window (достаточно для single-instance деплоя;

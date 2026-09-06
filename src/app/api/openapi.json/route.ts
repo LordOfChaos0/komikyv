@@ -265,6 +265,33 @@ export async function GET() {
           responses: { ...ok("Cookie сессии очищена"), ...errs(403) },
         },
       },
+      "/api/auth/account": {
+        delete: {
+          tags: ["Auth"],
+          summary: "Удаление собственного аккаунта (152-ФЗ)",
+          description:
+            "Soft delete + анонимизация: email/имя/пароль/2FA-секреты обезличиваются, " +
+            "уведомления и личные заметки удаляются, агрегированная статистика сохраняется. " +
+            "Требует подтверждения паролем. Сессия завершается. Rate limit: 3/мин.",
+          security: auth,
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["password", "confirmed"],
+                  properties: {
+                    password: { type: "string", description: "Текущий пароль для подтверждения" },
+                    confirmed: { type: "boolean", enum: [true], description: "Подтверждение необратимости" },
+                  },
+                },
+              },
+            },
+          },
+          responses: { ...ok("{ok: true} — аккаунт удалён"), ...errs(400, 401, 429) },
+        },
+      },
       "/api/auth/me": {
         get: {
           tags: ["Auth"],
@@ -859,6 +886,31 @@ export async function GET() {
           security: [{ cookieAuth: [], adminToken: [] }],
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           responses: { ...ok("{password, email} — показать один раз"), ...errs(401, 403, 404) },
+        },
+      },
+      "/api/admin/users/{id}": {
+        delete: {
+          tags: ["Admin"],
+          summary: "Удаление профиля пользователя администратором",
+          description:
+            "Soft delete + анонимизация ПД (152-ФЗ). Запрещено: удалять собственный аккаунт " +
+            "и последнего активного администратора. Факт с причиной фиксируется в AuditLog.",
+          security: [{ cookieAuth: [], adminToken: [] }],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    reason: { type: "string", maxLength: 500, description: "Причина удаления (в аудит-лог)" },
+                  },
+                },
+              },
+            },
+          },
+          responses: { ...ok("{ok: true} — профиль удалён и анонимизирован"), ...errs(400, 401, 403, 404) },
         },
       },
       "/api/admin/moderation": {
