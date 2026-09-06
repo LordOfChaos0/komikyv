@@ -44,6 +44,9 @@ jobs:
             echo ">>> Generate Prisma client"
             bunx prisma generate
 
+            echo ">>> Apply DB schema (additive, e.g. 2FA columns in User)"
+            bunx prisma db push
+
             echo ">>> Production build"
             bun run build
 

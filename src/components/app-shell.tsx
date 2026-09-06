@@ -15,6 +15,7 @@ import {
   LogIn,
   LogOut,
   Shield,
+  Database,
   GraduationCap,
   Menu,
   Award,
@@ -62,6 +63,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { CookieConsentBanner } from "@/components/cookie-banner";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 
@@ -131,6 +133,7 @@ const ADMIN_NAV: NavItem[] = [
   { view: "admin-dashboard", label: "Дашборд", icon: Shield, roles: ["admin"] },
   { view: "admin-moderation", label: "Модерация", icon: Award, roles: ["admin"] },
   { view: "admin-users", label: "Пользователи", icon: Users, roles: ["admin"] },
+  { view: "admin-db", label: "База данных", icon: Database, roles: ["admin"] },
   { view: "modules", label: "Каталог", icon: BookOpen },
   { view: "flashcards", label: "Карточки", icon: Layers },
   { view: "srs", label: "Повторения", icon: Repeat, roles: ["admin"] },
@@ -427,6 +430,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <Footer />
+
+        {/* Баннер согласия на cookie (до первого решения) */}
+        <CookieConsentBanner />
       </div>
 
       {/* Command palette (Cmd+K). key перемонтирует палитру при переходе

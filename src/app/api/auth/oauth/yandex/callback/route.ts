@@ -16,7 +16,10 @@ interface YandexUserInfo {
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
+  // Канонический origin: за reverse-proxy Next standalone видит себя как
+  // 0.0.0.0:3000, поэтому для редиректов используем APP_URL из .env
+  const origin = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");

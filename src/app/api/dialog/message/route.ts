@@ -27,6 +27,31 @@ const SYSTEM_PROMPT = `Ты — диалоговый тренажёр для и�
 
 Помни: твой тон — дружелюбный, поддерживающий, как у старшего друга, помогающего учить язык.`;
 
+// Достаём текст ответа даже от «мыслящих» моделей: если content пуст —
+// берём reasoning_content, затем вырезаем служебные <think>-блоки.
+function extractText(completion: any): string {
+  const msg = completion?.choices?.[0]?.message;
+  let text = typeof msg?.content === "string" ? msg.content : "";
+  if (!text.trim() && typeof msg?.reasoning_content === "string") {
+    text = msg.reasoning_content;
+  }
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
+// Ограничиваем время ожидания LLM: без этого зависший вверх по цепочке
+// прокси оставляет индикатор «...» в чате навсегда (у fetch нет таймаута).
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`${label}: превышено время ожидания ${Math.round(ms / 1000)} с`)),
+        ms
+      );
+    }),
+  ]);
+}
+
 // POST /api/dialog/message — send user message, get AI reply in Komi
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -90,43 +115,78 @@ export async function POST(req: NextRequest) {
   }
   history.push({ role: "user", content: message });
 
-  // Call LLM
+  // Call LLM.
+  // Основной ответ и грамматическая подсказка идут ПАРАЛЛЕЛЬНО
+  // (раньше — строго друг за другом, что удваивало ожидание),
+  // каждая со своим таймаутом: «...» в чате не может висеть бесконечно.
+  const model = process.env.LLM_MODEL || "qwen3.8-flash";
   let assistantReply = "";
   let grammarFeedback = "";
+  const t0 = Date.now();
   try {
     const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: history,
-      temperature: 0.7,
-      max_tokens: 350,
-    });
-    assistantReply = completion.choices?.[0]?.message?.content?.trim() || "Ме ог тӧда, мый шуны. [RU: Я не знаю, что сказать.]";
+    const [mainRes, hintRes] = await Promise.allSettled([
+      withTimeout(
+        zai.chat.completions.create({
+          // model обязателен для API Z.ai; SDK не подставляет его сам
+          model,
+          messages: history,
+          temperature: 0.7,
+          max_tokens: 350,
+        }),
+        60000,
+        "Ответ нейросети"
+      ),
+      withTimeout(
+        zai.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Ты — методист по коми языку. Дай ОДНУ короткую подсказку по грамматике/лексике для ученика на основе его последней реплики. Ответ — одной строкой на русском, не более 80 символов. Если ошибок нет — ответь «Всё верно!»",
+            },
+            { role: "user", content: `Реплика ученика: «${message}»` },
+          ],
+          temperature: 0.3,
+          max_tokens: 100,
+        }),
+        25000,
+        "Грамматическая подсказка"
+      ),
+    ]);
+
+    if (mainRes.status === "fulfilled") {
+      assistantReply =
+        extractText(mainRes.value) || "Ме ог тӧда, мый шуны. [RU: Я не знаю, что сказать.]";
+      console.log(`[dialog-llm] model=${model} ms=${Date.now() - t0} len=${assistantReply.length}`);
+    } else {
+      // Причина попадает и в лог, и в toast в браузере — сразу видно,
+      // что именно не так (модель / ключ / таймаут).
+      const reason = String(mainRes.reason?.message || mainRes.reason || "неизвестная ошибка");
+      console.error(`[dialog-llm] model=${model} FAILED ms=${Date.now() - t0}: ${reason}`);
+      return NextResponse.json(
+        { error: `Нейросеть (${model}) не ответила: ${reason.slice(0, 300)}` },
+        { status: 502 }
+      );
+    }
+
+    if (hintRes.status === "fulfilled") {
+      grammarFeedback = extractText(hintRes.value).slice(0, 200);
+    } else {
+      // Подсказка необязательна: диалог не должен из-за неё падать или ждать.
+      console.error(
+        "[dialog-llm] grammar hint failed:",
+        String(hintRes.reason?.message || hintRes.reason || "").slice(0, 200)
+      );
+      grammarFeedback = "";
+    }
   } catch (e: any) {
     console.error("LLM error:", e?.message || e);
     return NextResponse.json(
       { error: "Не удалось получить ответ от нейросети. Попробуйте позже." },
       { status: 502 }
     );
-  }
-
-  // Optional second-pass: short grammar note
-  try {
-    const zai = await ZAI.create();
-    const feedback = await zai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "Ты — методист по коми языку. Дай ОДНУ короткую подсказку по грамматике/лексике для ученика на основе его последней реплики. Ответ — одной строкой на русском, не более 80 символов. Если ошибок нет — ответь «Всё верно!»",
-        },
-        { role: "user", content: `Реплика ученика: «${message}»` },
-      ],
-      temperature: 0.3,
-      max_tokens: 100,
-    });
-    grammarFeedback = feedback.choices?.[0]?.message?.content?.trim() || "";
-  } catch {
-    grammarFeedback = "";
   }
 
   // Persist messages

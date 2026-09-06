@@ -34,6 +34,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SecurityCard } from "@/components/views/security-card";
+import { DeleteAccountCard } from "@/components/views/delete-account-card";
 
 interface Settings {
   theme: "light" | "dark";
@@ -152,6 +154,9 @@ export function SettingsView() {
           Персонализируйте платформу под свой стиль обучения
         </p>
       </div>
+
+      {/* Безопасность: двухфакторная аутентификация (TOTP) */}
+      <SecurityCard />
 
       {/* Appearance */}
       <Card>
@@ -379,6 +384,9 @@ export function SettingsView() {
           </Badge>
         )}
       </div>
+
+      {/* Опасная зона: удаление аккаунта (152-ФЗ) */}
+      <DeleteAccountCard />
     </div>
   );
 }

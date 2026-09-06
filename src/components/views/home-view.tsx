@@ -344,9 +344,6 @@ export function HomeView() {
                 Узнать больше
               </Button>
             </div>
-            <div className="mt-6 text-xs text-muted-foreground">
-              Демо-доступ: <code className="bg-muted px-1.5 py-0.5 rounded">student@komikyv.ru</code> / <code className="bg-muted px-1.5 py-0.5 rounded">Student123!</code>
-            </div>
           </div>
         </section>
       )}

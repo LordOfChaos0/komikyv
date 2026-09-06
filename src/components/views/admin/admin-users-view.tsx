@@ -17,6 +17,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -25,15 +34,26 @@ import {
 } from "@/components/ui/select";
 import {
   Users, Search, Shield, Zap, Flame, BookOpen, MessageCircle, ChevronLeft, ChevronRight,
-  KeyRound, Copy, Check,
+  KeyRound, Copy, Check, Trash2, Loader2, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-store";
 
 export function AdminUsersView() {
   const queryClient = useQueryClient();
+  const { user: currentAdmin } = useAuth();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
   const [page, setPage] = useState(1);
+
+  // Диалог подтверждения удаления профиля (REC 4.2)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    email: string;
+    fullName: string | null;
+    role: string;
+  } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Диалог результата сброса пароля (REC 4.2)
   const [resetResult, setResetResult] = useState<{
@@ -85,6 +105,20 @@ export function AdminUsersView() {
       toast.error("Не удалось скопировать — выделите пароль вручную");
     }
   };
+
+  // Удаление профиля администратором (soft delete + анонимизация)
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/admin/users/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      setDeleteError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+      toast.success("Пользователь удалён, данные анонимизированы");
+    },
+    onError: (e: any) => setDeleteError(e.message || "Не удалось удалить пользователя"),
+  });
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-6">
@@ -182,6 +216,24 @@ export function AdminUsersView() {
                     >
                       {u.isActive ? "Заблокировать" : "Разблокировать"}
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteTarget({ id: u.id, email: u.email, fullName: u.fullName, role: u.role });
+                      }}
+                      disabled={deleteUserMutation.isPending || u.id === currentAdmin?.id}
+                      className="h-8"
+                      title={
+                        u.id === currentAdmin?.id
+                          ? "Нельзя удалить свой аккаунт из админ-панели — используйте Настройки"
+                          : "Удалить профиль безвозвратно (soft delete + анонимизация)"
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Удалить
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -221,6 +273,73 @@ export function AdminUsersView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Подтверждение удаления профиля (REC 4.2, 152-ФЗ) */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Удалить пользователя?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-left">
+                <p>
+                  Профиль{" "}
+                  <span className="font-medium text-foreground">
+                    {deleteTarget?.fullName || deleteTarget?.email}
+                  </span>{" "}
+                  будет удалён (soft delete): персональные данные — email, имя, пароль, 2FA —
+                  будут анонимизированы по 152-ФЗ, вход в аккаунт станет невозможен.
+                  Агрегированная статистика сохранится в обезличенном виде.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Действие фиксируется в журнале аудита. Восстановить аккаунт нельзя —
+                  при необходимости пользователь сможет зарегистрироваться заново.
+                </p>
+                {deleteError && (
+                  <p className="text-xs text-destructive">{deleteError}</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+            >
+              Отмена
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && deleteUserMutation.mutate(deleteTarget.id)}
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Удаление...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Удалить профиль
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pagination */}
       {data && data.totalPages > 1 && (
