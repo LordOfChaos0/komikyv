@@ -818,3 +818,24 @@ Stage Summary:
 - CI/CD полностью подготовлен и закоммичен локально (ee55abf): ci.yml (линт + типы + сборка на каждый PR и push) + deploy.yml (авто-деплой на VM после зелёного CI на main); пуш заблокирован правами PAT — ожидается от пользователя токен с разрешением «Workflows» (можно ДОБАВИТЬ существующему токену: Settings → Developer settings → Fine-grained tokens → Permissions → Workflows → Read and write)
 - Пользователю для включения деплоя: (а) разрешение Workflows у PAT — для пуша; (б) 4 секрета Actions (SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_PATH) + sudoers-строка «ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv» (DEPLOY.md §8.2)
 - Демо-БД в репо отстала от схемы — CI не ломается, при первом деплое лечится db push; рекомендуется позже вынести рабочую БД VM из дерева репозитория (риск конфликтов git pull при задеплоенной БД)
+
+---
+Task ID: 16
+Agent: Main
+Task: Публикация CI/CD на GitHub с новым PAT (Workflows-разрешение) и верификация первого CI-прогона
+
+Work Log:
+- Пользователь выдал новый fine-grained PAT (в чате; в файлы/конфиги не записывался, в remote URL не сохранён — одноразовый URL пуша с редакцией в выводе)
+- Аудит состояния: рабочее дерево чистое, main ahead 2 (0f21e81 CI/CD + автокоммит-UUID 381dcef с db/custom.db)
+- Проверка демо-БД перед пушем (scripts/db-check.mjs): 5 пользователей, все тестовые (admin/teacher/student@komikyv.ru + test-yandex/unverified@yandex.ru), активных кодов верификации/сброса нет, verificationCode у всех NULL — публиковать безопасно; БД обновлена свежее репо-версии и требуется CI для пререндера (ci.yml: DATABASE_URL=file:.../db/custom.db), что соответствует исторической конвенции репо («Синхронизирована демо-база…»)
+- Автокоммит-UUID 381dcef переименован через commit --amend → 2d51872 «Демо-база: синхронизация после SMTP-диагностики и регрессионного тестирования (тест-аккаунты yandex, коды верификации очищены)»
+- Push main через одноразовый URL с новым PAT: УСПЕШНО (6c836af..2d51872) — у токена есть разрешение Workflows, что ранее блокировало пуш
+- git fetch + status: main синхронизирован с origin/main
+- GitHub API (Bearer PAT): CI run #1 (34165565759) запущен автоматически от push в main, статус in_progress
+- Итог CI run #1: УСПЕХ, все шаги зелёные (bun install --frozen-lockfile → prisma generate → ESLint → tsc --noEmit → next build), ~1 мин на ubuntu-latest
+- Deploy workflow запустился автоматически после успешного CI (workflow_run) и завершился success: секреты SSH не настроены → пропуск с ::warning, как задумано (не красный)
+
+Stage Summary:
+- CI/CD опубликован: https://github.com/LordOfChaos0/komikyv — workflows ci.yml и deploy.yml в main, вместе с актуальной синхронизацией демо-базы
+- Конвейер подтверждён в бою: push в main → CI зелёный → Deploy срабатывает и ждёт секретов
+- Следующий шаг пользователя: настройка 4 секретов Actions для включения авто-деплоя (DEPLOY.md §8.2)
