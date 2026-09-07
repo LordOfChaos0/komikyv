@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,6 +52,13 @@ export function WordMatcherView() {
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
+  // Порядок показа колонок фиксируем один раз на раунд (только id).
+  // Раньше порядок мемоизировался по [pairs.length], длина не менялась
+  // при матче — и колонки рендерили УСТАРЕВШИЕ копии пар (matched: false
+  // навсегда) → кнопки не деактивировались, очки можно было фармить бесконечно.
+  // Теперь рендер всегда берёт свежие объекты пар из pairs по id.
+  const [komiOrder, setKomiOrder] = useState<string[]>([]);
+  const [ruOrder, setRuOrder] = useState<string[]>([]);
 
   // Fetch vocabulary
   const { data: vocabData, isLoading } = useQuery({
@@ -76,6 +83,9 @@ export function WordMatcherView() {
       wrong: false,
     }));
     setPairs(newPairs);
+    // Независимые перемешивания коми и русских колонок (порядок — только id)
+    setKomiOrder([...newPairs].sort(() => Math.random() - 0.5).map((p) => p.vocabId));
+    setRuOrder([...newPairs].sort(() => Math.random() - 0.5).map((p) => p.vocabId));
     setSelectedKomi(null);
     setSelectedRu(null);
     setMatched(0);
@@ -103,7 +113,8 @@ export function WordMatcherView() {
   // Проверка пары — вызывается из обработчиков кликов (не из effect)
   const evaluateMatch = (komiId: string, ru: string) => {
     const pair = pairs.find((p) => p.vocabId === komiId);
-    if (pair && pair.ru === ru) {
+    // ВАЖНО: guard на pair.matched — пара уже угадана → очки не начисляются
+    if (pair && !pair.matched && pair.ru === ru) {
       // Correct match!
       setPairs((prev) =>
         prev.map((p) =>
@@ -162,16 +173,8 @@ export function WordMatcherView() {
     }
   };
 
-  // Shuffle the display order of komi and ru independently
-  const komiOrder = useMemo(() => {
-    return [...pairs].sort(() => Math.random() - 0.5);
-  }, [pairs.length]); // reshuffle only when pair count changes (new round)
-
-  const ruOrder = useMemo(() => {
-    return [...pairs].sort(() => Math.random() - 0.5);
-  }, [pairs.length]);
-
-  // === SETUP ===
+  // === SETUP === (порядок показа колонок фиксирован на раунд; объекты пар —
+  // всегда свежие из pairs, поэтому matched-состояние отражается в UI сразу)
   if (state === "setup") {
     return (
       <div className="mx-auto max-w-2xl px-4 sm:px-6 py-8 space-y-6">
@@ -297,25 +300,29 @@ export function WordMatcherView() {
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center mb-2">
             Коми
           </div>
-          {komiOrder.map((pair) => (
-            <button
-              key={pair.vocabId}
-              disabled={pair.matched}
-              onClick={() => handleKomiClick(pair)}
-              className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
-                pair.matched
-                  ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"
-                  : pair.wrong
-                  ? "border-chart-3 bg-chart-3/10 text-chart-3 animate-pulse"
-                  : selectedKomi === pair.vocabId
-                  ? "border-primary bg-primary/10 text-primary scale-105"
-                  : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
-              }`}
-            >
-              {pair.komi}
-              {pair.matched && <Check className="inline h-4 w-4 ml-1" />}
-            </button>
-          ))}
+          {komiOrder.map((vocabId) => {
+            const pair = pairs.find((p) => p.vocabId === vocabId);
+            if (!pair) return null;
+            return (
+              <button
+                key={pair.vocabId}
+                disabled={pair.matched}
+                onClick={() => handleKomiClick(pair)}
+                className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
+                  pair.matched
+                    ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"
+                    : pair.wrong
+                    ? "border-chart-3 bg-chart-3/10 text-chart-3 animate-pulse"
+                    : selectedKomi === pair.vocabId
+                    ? "border-primary bg-primary/10 text-primary scale-105"
+                    : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
+                }`}
+              >
+                {pair.komi}
+                {pair.matched && <Check className="inline h-4 w-4 ml-1" />}
+              </button>
+            );
+          })}
         </div>
 
         {/* Russian column */}
@@ -323,25 +330,29 @@ export function WordMatcherView() {
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center mb-2">
             Русский
           </div>
-          {ruOrder.map((pair, idx) => (
-            <button
-              key={`${pair.vocabId}-${idx}`}
-              disabled={pair.matched}
-              onClick={() => handleRuClick(pair)}
-              className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
-                pair.matched
-                  ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"
-                  : pair.wrong
-                  ? "border-chart-3 bg-chart-3/10 text-chart-3 animate-pulse"
-                  : selectedRu === pair.ru
-                  ? "border-primary bg-primary/10 text-primary scale-105"
-                  : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
-              }`}
-            >
-              {pair.ru}
-              {pair.matched && <Check className="inline h-4 w-4 ml-1" />}
-            </button>
-          ))}
+          {ruOrder.map((vocabId) => {
+            const pair = pairs.find((p) => p.vocabId === vocabId);
+            if (!pair) return null;
+            return (
+              <button
+                key={pair.vocabId}
+                disabled={pair.matched}
+                onClick={() => handleRuClick(pair)}
+                className={`w-full p-3 rounded-lg border-2 text-center font-medium transition-all ${
+                  pair.matched
+                    ? "border-chart-1/30 bg-chart-1/10 text-chart-1/50 line-through opacity-50"
+                    : pair.wrong
+                    ? "border-chart-3 bg-chart-3/10 text-chart-3 animate-pulse"
+                    : selectedRu === pair.ru
+                    ? "border-primary bg-primary/10 text-primary scale-105"
+                    : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
+                }`}
+              >
+                {pair.ru}
+                {pair.matched && <Check className="inline h-4 w-4 ml-1" />}
+              </button>
+            );
+          })}
         </div>
       </div>
 

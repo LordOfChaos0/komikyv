@@ -26,8 +26,11 @@ export function CultureView() {
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-8">
       {/* Hero */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary via-primary to-chart-3 text-primary-foreground shadow-xl">
-        <div className="absolute inset-0 komi-ornament opacity-20" />
+      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary via-primary to-chart-3 text-primary-foreground shadow-xl">
+        {/* Орнамент: absolute-слой обязан быть заперт внутри relative-карточки,
+            иначе inset-0 растягивается на весь экран (включая сайдбар)
+            и перехватывает клики. pointer-events-none — двойная защита. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 komi-ornament opacity-20" />
         <CardContent className="relative p-8 sm:p-12">
           <Badge className="mb-4 bg-white/15 text-white border-white/20 backdrop-blur">
             <Globe className="h-3.5 w-3.5 mr-1" />

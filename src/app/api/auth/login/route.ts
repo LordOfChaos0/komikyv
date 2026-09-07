@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       });
       await setSessionCookie(token);
       return NextResponse.json({
-        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
+        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, createdAt: user.createdAt },
       });
     }
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
         });
         await setSessionCookie(token);
         return NextResponse.json({
-          user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
+          user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, createdAt: user.createdAt },
         });
       }
 
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     await setSessionCookie(token);
 
     return NextResponse.json({
-      user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
+      user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, createdAt: user.createdAt },
     });
   } catch (e) {
     console.error("Login error:", e);

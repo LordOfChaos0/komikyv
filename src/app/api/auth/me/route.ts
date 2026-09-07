@@ -14,7 +14,7 @@ export async function GET() {
     }),
     db.user.findFirst({
       where: { id: user.id },
-      select: { emailVerified: true },
+      select: { emailVerified: true, createdAt: true },
     }),
   ]);
   return NextResponse.json({
@@ -25,6 +25,7 @@ export async function GET() {
       fullName: user.fullName,
       isActive: user.isActive,
       emailVerified: dbUser?.emailVerified ?? false,
+      createdAt: dbUser?.createdAt ?? null,
       profile,
     },
   });

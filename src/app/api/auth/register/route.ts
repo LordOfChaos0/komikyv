@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     await setSessionCookie(token);
 
     return NextResponse.json({
-      user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
+      user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, createdAt: user.createdAt },
       emailVerification: {
         sent: emailResult.sent,
         devCode: emailResult.devCode || null, // shown in dev mode when SMTP not configured

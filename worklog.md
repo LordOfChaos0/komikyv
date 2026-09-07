@@ -744,3 +744,39 @@ Work Log:
 
 Stage Summary:
 - 2 новых API-маршрута, 2 новых компонента, 4 обновлённых файла; безопасность: CSRF/rate-limit/RBAC на новых эндпоинтах; 152-ФЗ-соответствие закрыто (согласие при регистрации, cookie-баннер, удаление ПД).
+
+---
+Task ID: 12
+Agent: Main
+Task: Диагностика причины неотправки писем по SMTP (запрос пользователя)
+
+Work Log:
+- Проверил /home/z/my-project/.env — переменные SMTP_HOST/SMTP_USER/SMTP_PASS отсутствуют (только DATABASE_URL)
+- Проверил dev.log — письма не отправлялись вообще, вместо этого строки «📧 [DEV MODE] Verification code for ...» (mailer.ts работает в dev-режиме, код возвращается в поле devCode)
+- Проверил src/lib/mailer.ts: getSmtpConfig() возвращает null без SMTP_* → sendVerificationEmail/sendPasswordResetEmail не создают transport, а возвращают devCode
+- Создал диагностический скрипт scripts/test-smtp.mjs: читает .env, проверяет TCP/TLS-доступность порта, transporter.verify() (авторизация) и отправку тестового письма с debug=true (полный SMTP-диалог), расшифровывает типовые ошибки (535/553/ETIMEDOUT/certificate/Greeting)
+- Запустил скрипт — подтвердил первопричину: SMTP не настроен
+
+Stage Summary:
+- Первопричина в песочнице: SMTP_* переменные не заданы в .env → dev-режим, письма физически не отправляются
+- Для реальной отправки: заполнить .env (Yandex: smtp.yandex.ru:465, пароль приложения), перезапустить dev-server
+- Диагностика на своей ВМ: node scripts/test-smtp.mjs test@example.com — покажет точную причину на каждом этапе (сеть → авторизация → отправка)
+
+---
+Task ID: 13
+Agent: Main
+Task: Исправление трёх багов (запрос пользователя): дата регистрации, блокировка сайдбара на «Культуре», бесконечные очки в «Слово-матче»
+
+Work Log:
+- Баг 1 (дата регистрации обновляется каждый день): найдена первопричина — profile-view.tsx:190 содержал выражение new Date(user.id.slice(-8) ? Date.now() : Date.now()), всегда возвращающее текущую дату; при этом API не отдавал createdAt вовсе.
+  Исправление: добавлен createdAt в CurrentUser (auth-store.ts), в ответы /api/auth/me (select createdAt), login (3 места), register; профиль теперь рендерит user.createdAt с fallback «—». Проверено curl-ом: login и /me отдают createdAt=2026-08-22 (реальная дата регистрации).
+- Баг 2 (сайдбар блокируется на вкладке «Культура»): hero-Card в culture-view содержал <div absolute inset-0 komi-ornament>, но Card из shadcn/ui не имеет position:relative → слой «вырывался» из overflow-hidden и растягивался на весь viewport (inset-0 относительно initial containing block), перехватывая клики по сайдбару.
+  Исправление: Card получил relative, орнаменту добавлены pointer-events-none и aria-hidden. Аудит остальных absolute inset-0 (home, srs, flashcards, memory-cards, login) — везде родители позиционированы, проблем нет. Проверено браузером: elementFromPoint в зоне сайдбара возвращает кнопку, навигация Культура → Главная работает.
+- Баг 3 (слово-матч: угаданные слова не деактивируются, очки бесконечны): колонки рендерились из useMemo(..., [pairs.length]) — длина массива не меняется при матче, useMemo возвращал устаревшие копии пар (matched:false навсегда); evaluateMatch не проверял pair.matched → повторные клики начисляли очки.
+  Исправление: порядок показа фиксируется в state при старте раунда (только vocabId), рендер берёт свежие объекты из pairs по id; в evaluateMatch добавлен guard !pair.matched. Браузерный тест: правильный матч → кнопки disabled+line-through+opacity; повторный клик по угаданной паре → счёт не растёт (10→10); полный раунд → «Победа! Все пары найдены», 295 очков, 0 ошибок.
+
+Stage Summary:
+- Все три бага исправлены и верифицированы (curl + agent-browser UI-тесты)
+- tsc --noEmit: в src/ ошибок нет
+- dev-server работает, hot-reload ок
+- Изменённые файлы: profile-view.tsx, auth-store.ts, api/auth/me/route.ts, api/auth/login/route.ts, api/auth/register/route.ts, culture-view.tsx, word-matcher-view.tsx
