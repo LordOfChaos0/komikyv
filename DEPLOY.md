@@ -430,66 +430,90 @@ systemctl is-active komikyv && journalctl -u komikyv -n 5 --no-pager
 
 ---
 
-## 12. ASR / TTS / LLM — конфигурация z-ai-web-dev-sdk
+## 12. ASR / TTS / LLM — AI-провайдеры (z.ai, OpenAI-совместимые, Yandex SpeechKit)
 
 Тренажёр диалогов (LLM), озвучка слов (TTS) и анализ произношения (ASR)
-работают через `z-ai-web-dev-sdk` (зависимость в package.json). Все три
-функции использует один и тот же конфиг: при первом вызове `ZAI.create()`
-SDK ищет JSON-файл `.z-ai-config` по порядку:
+работают через единый слой `src/lib/ai-providers.ts`. Провайдер выбирается
+**отдельно для каждой функции** (можно смешивать, например TTS от Яндекса,
+ASR от z.ai, LLM от OpenAI) переменными из `.env`:
 
-1. `<CWD процесса>/.z-ai-config` — на VM это WorkingDirectory сервиса
-   (`.next/standalone`) — **не рекомендуется**: каталог пересоздаётся при
-   каждой сборке, конфиг теряется;
-2. `~/.z-ai-config` — home пользователя сервиса;
-3. `/etc/.z-ai-config` — системный, **рекомендуется**: переживает деплои.
+```env
+AI_TTS_PROVIDER=zai      # zai | openai | yandex
+AI_ASR_PROVIDER=zai      # zai | openai | yandex
+AI_CHAT_PROVIDER=zai     # zai | openai
+```
 
-Формат файла:
+Не заданы — везде `zai` (как в песочнице, работает из коробки).
+
+### 12.1. zai (по умолчанию)
+
+Конфиг `.z-ai-config` (JSON) ищется по порядку: CWD процесса
+(на VM это `.next/standalone` — **не кладите туда**, пересоздаётся при
+каждой сборке) → `~/.z-ai-config` → `/etc/.z-ai-config` (**рекомендуется**).
 
 ```json
-{
-  "baseUrl": "https://api.z.ai/api/paas/v4",
-  "apiKey": "<ваш API-ключ Z.ai>"
-}
+{ "baseUrl": "https://api.z.ai/api/paas/v4", "apiKey": "<ваш ключ>" }
 ```
 
-SDK строит от `baseUrl` пути `/chat/completions`, `/audio/tts`,
-`/audio/asr` — базовый URL должен быть OpenAI-совместимым, с версией
-в пути (сверяйте актуальное значение в документации API-платформы;
-в песочнице Z.ai используется `https://internal-api.z.ai/v1`).
+В песочнице конфиг выдан окружением в `/etc/.z-ai-config`.
+Модель LLM — переменная `LLM_MODEL` (по умолчанию `qwen3.8-flash`).
 
-Настройка на VM:
+### 12.2. openai — любой OpenAI-совместимый API
 
-```bash
-sudo tee /etc/.z-ai-config > /dev/null <<'EOF'
-{
-  "baseUrl": "https://api.z.ai/api/paas/v4",
-  "apiKey": "ВАШ_КЛЮЧ"
-}
-EOF
-sudo chmod 640 /etc/.z-ai-config
-sudo systemctl restart komikyv
+OpenAI, Groq, OpenRouter (только чат), LocalAI, vLLM, а также self-hosted
+whisper-серверы (speaches, faster-whisper-server). Это же — способ работать
+с **локальными моделями без внешних ключей**.
+
+```env
+AI_OPENAI_BASE_URL=https://api.openai.com/v1
+AI_OPENAI_API_KEY=sk-...
+AI_TTS_MODEL=tts-1            # голоса: alloy, echo, fable, onyx, nova, shimmer
+AI_TTS_VOICE=alloy
+AI_ASR_MODEL=whisper-1        # у Groq: whisper-large-v3
+LLM_MODEL=gpt-4o-mini         # при AI_CHAT_PROVIDER=openai
 ```
 
-Файл `.z-ai-config` в `.gitignore` — секрет в репозиторий не попадает.
+Пути при необходимости переопределяются: `AI_TTS_PATH` (умолч.
+`/audio/speech`), `AI_ASR_PATH` (`/audio/transcriptions`),
+`AI_CHAT_PATH` (`/chat/completions`). Локальный пример: поднять
+whisper-сервер на VM и указать `AI_OPENAI_BASE_URL=http://127.0.0.1:8000/v1`.
 
-Проверка на VM (API требует авторизации — сначала логин):
+### 12.3. yandex — Yandex SpeechKit
+
+```env
+AI_YANDEX_API_KEY=<ключ API из консоли Yandex Cloud>
+AI_YANDEX_FOLDER_ID=<folderId>
+AI_YANDEX_TTS_VOICE=alena     # alena, filipp, marina, polly, ermil, zahar…
+AI_YANDEX_LANG=ru-RU
+```
+
+TTS (v2 REST) возвращает lpcm — сервер сам оборачивает в WAV.
+ASR (v2 REST) принимает только OggOpus: записи браузера (webm/opus)
+**переконтейнируются через ffmpeg** — на VM нужен
+`apt install ffmpeg` (кодек не перекодируется, быстро).
+Работа через прокси: `AI_YANDEX_TTS_URL` / `AI_YANDEX_ASR_URL`.
+
+### 12.4. Проверка (на VM, API требует авторизации)
 
 ```bash
-curl -s -c /tmp/c.txt -X POST http://localhost:3000/api/auth/login \
-  -H 'Content-Type: application/json' \
+curl -s -c /tmp/c.txt -o /dev/null http://localhost:3000/api/auth/me   # получить CSRF-куку
+CSRF=$(awk '$6=="komi_csrf" {print $7}' /tmp/c.txt)
+curl -s -b /tmp/c.txt -c /tmp/c.txt -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
   -d '{"email":"student@komikyv.ru","password":"ПАРОЛЬ_ДЕМО"}'
 curl -s -b /tmp/c.txt -X POST http://localhost:3000/api/tts \
-  -H 'Content-Type: application/json' -d '{"text":"Бур"}' | head -c 120
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
+  -d '{"text":"Бур"}' | head -c 120
 # нормальный ответ начинается с: {"audio":"data:audio/wav;base64,UklGR...
 journalctl -u komikyv | grep -E "TTS error|ASR error"   # диагностика ошибок
 ```
 
 Ограничения (важно понимать):
 
-- TTS-голос `tongtong` — единственный в SDK; модель не обучена коми,
-  озвучивает текст фонетически (ориентир, но не эталон носителя);
-- ASR не специализируется на коми: возвращает транскрипцию «как слышит»,
-  точность считается по расстоянию Левенштейна к целевому слову;
-- параметры TTS API проекта: `voice` (по умолчанию tongtong), `speed`
-  0.5–2.0, формат wav; озвучка слов словаря кэшируется в БД
-  (`vocabulary.audioBase64`) — повторные прослушивания не тратят API.
+- коми-голосов нет ни у одного провайдера: озвучка фонетическая
+  (zai — `tongtong`, OpenAI — `alloy`…, Yandex — `alena`…);
+- ASR у всех «транскрибирует как слышит», точность считается по
+  расстоянию Левенштейна к целевому слову — методика не зависит от провайдера;
+- озвучка слов словаря кэшируется в БД (`vocabulary.audioBase64`) —
+  повторные прослушивания не тратят API, кэш переживёт смену провайдера
+  (формат WAV одинаков у всех).

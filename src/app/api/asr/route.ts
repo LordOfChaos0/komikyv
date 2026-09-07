@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import ZAI from "z-ai-web-dev-sdk";
+import { asrTranscribe } from "@/lib/ai-providers";
 
 // POST /api/asr — transcribe user's audio recording and compare with target Komi word/phrase
 // Body (JSON): { audioBase64: string, target?: string }
@@ -23,21 +23,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Параметр audioBase64 обязателен" }, { status: 400 });
   }
 
-  // Strip data URL prefix to get raw base64
+  // Стрипаем data-URL-префикс, заодно вытаскиваем MIME (браузер шлёт audio/webm)
+  const mimeMatch = /^data:([^;,]+)/.exec(audioBase64);
+  const mime = mimeMatch?.[1] || "audio/webm";
   const base64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+  const audio = Buffer.from(base64, "base64");
 
   try {
-    const zai = await ZAI.create();
-    const response = await zai.audio.asr.create({
-      file_base64: base64,
-    } as any);
-
-    const text =
-      typeof response === "string"
-        ? response
-        : (response as any)?.text ||
-          (response as any)?.transcript ||
-          "";
+    // Провайдер выбирается env (zai | openai | yandex) — см. src/lib/ai-providers.ts
+    const { text } = await asrTranscribe(audio, mime);
 
     // If target provided, compute accuracy using Levenshtein distance
     let accuracy = 0;

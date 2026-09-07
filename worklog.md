@@ -872,3 +872,30 @@ Work Log:
 Stage Summary:
 - Ответ пользователю: в песочнице уже работает из коробки; на VM — один файл /etc/.z-ai-config с apiKey, код менять не нужно; один конфиг на TTS+ASR+LLM
 - Документация дополнила DEPLOY.md (§12), CI проверит пуш
+
+---
+Task ID: 19
+Agent: Main
+Task: Рефакторинг AI-слоя под любых провайдера (запрос: «отредактируй код под любых провайдеров»)
+
+Work Log:
+- Новый модуль src/lib/ai-providers.ts — единая точка входа для TTS/ASR/LLM:
+  * публичный API: ttsSynthesize(text, {voice, speed}) → WAV-Buffer; asrTranscribe(audio, mime) → текст; chatCompletion(params) → completion в OpenAI-форме; defaultChatModel()
+  * провайдеры: zai (по умолчанию, как раньше), openai (любой OpenAI-совместимый REST: OpenAI/Groq/LocalAI/vLLM/self-hosted whisper), yandex (SpeechKit v2 REST)
+  * выбор ПООТДЕЛЬНОСТИ на каждую функцию: AI_TTS_PROVIDER / AI_ASR_PROVIDER / AI_CHAT_PROVIDER — можно смешивать (TTS от Яндекса, LLM от OpenAI)
+  * openai: TTS POST /audio/speech (Bearer, response_format=wav, speed clamp 0.25–4.0), ASR POST /audio/transcriptions (multipart FormData/Blob, расширение из mime), chat POST /chat/completions; пути переопределяемы AI_TTS_PATH/AI_ASR_PATH/AI_CHAT_PATH (для нестандартных гейтвеев и локальных серверов)
+  * yandex: TTS v2 (Api-Key, lpcm 48к → сам оборачиваем в WAV заголовком RIFF), ASR v2 recognize (только OggOpus; webm/opus из браузера переконтейнируется ffmpeg-ремуксом -c:a copy, без ffmpeg — понятная ошибка); URL переопределяемы AI_YANDEX_TTS_URL/AI_YANDEX_ASR_URL для прокси/тестов
+  * все fetch с AbortSignal.timeout (30–90 c), понятные русские ошибки при отсутствующих ключах/неизвестном провайдере
+- Маршруты переведены на слой (SDK остался только в lib): /api/tts → ttsSynthesize (кэш vocabulary.audioBase64 сохранён), /api/asr → asrTranscribe (+ теперь парсит mime из data-URL — браузерный webm/opus правильно уходит в yandex/openai-провайдеры), /api/dialog/message → chatCompletion + defaultChatModel (LLM_MODEL по-прежнему работает; при openai-провайдере дефолт gpt-4o-mini, при zai — qwen3.8-flash)
+- .env.example: блок AI-провайдеров (все переменные с комментариями)
+- DEPLOY.md §12 переписан: 12.1 zai, 12.2 openai-совместимые (включая локальные whisper-серверы без ключей), 12.3 yandex (+ffmpeg-требование), 12.4 curl-проверка с CSRF; ограничение честно: коми-голосов нет ни у кого, методика оценки (Левенштейн) не зависит от провайдера
+- Тесты:
+  * живой сквозной (scripts/test-asr-roundtrip.mjs через dev-сервер, провайдер zai): логин → TTS 44KB WAV → ASR-роундтрип (transcript/accuracy/feedback) → LLM-диалог на коми с грамматической подсказкой — всё работает как до рефакторинга
+  * мок-тесты провайдеров (scripts/test-providers.ts, bun, локальный мок-сервер с контрактом реальных API): 9/9 ✓ — openai TTS/ASR, yandex TTS (lpcm→WAV RIFF) / ASR (ogg и webm→ffmpeg→ogg на реальном opus-файле), понятные ошибки без ключей/неизвестный провайдер, корректный путь чата
+  * tsc --noEmit: 0 ошибок в src/; eslint: чисто
+- Коммит и push
+
+Stage Summary:
+- Проект больше не привязан к Z.ai: смена провайдера = переменные окружения, код менять не нужно; в песочнице поведение по умолчанию не изменилось (zai, проверено живым тестом)
+- Сценарии: OpenAI/Groq ключи, Yandex SpeechKit (YC_API_KEY+folder_id), локальные whisper-серверы через AI_OPENAI_BASE_URL=http://127.0.0.1:PORT/v1, любые OpenAI-совместимые гейтвеи с кастомными путями
+- Для Yandex ASR из браузера на VM нужен ffmpeg (ремукс webm→ogg, без перекодирования)
