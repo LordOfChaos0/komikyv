@@ -856,3 +856,19 @@ Stage Summary:
 - Пользователю выдан готовый командный блок для VM (скопировать-вставить, с бэкапом живой БД до любых действий)
 - После выполнения: VM на edaa000 (3 багфикса доставлены на прод), конфликты pull невозможны в будущем, живая БД в /var/lib/komikyv/custom.db
 - Авто-деплой из deploy.yml заработает без конфликтов сразу после настройки 4 SSH-секретов (§8.2)
+
+---
+Task ID: 18
+Agent: Main
+Task: Ответ на вопрос «Как настроить ASR и TTS» + документирование конфигурации z-ai-web-dev-sdk
+
+Work Log:
+- Аудит реализации: /api/tts (voice tongtong, wav, кэш в vocabulary.audioBase64), /api/asr (file_base64 + Levenshtein accuracy), /api/dialog/message (LLM) — все через ZAI.create() из z-ai-web-dev-sdk@0.0.18
+- Из SDK (dist/index.js): конфиг .z-ai-config ищется по порядку — CWD процесса → ~/.z-ai-config → /etc/.z-ai-config; baseUrl + apiKey (JSON); от baseUrl строятся пути /chat/completions, /audio/tts, /audio/asr и др.
+- В песочнице конфиг выдан окружением: /etc/.z-ai-config → https://internal-api.z.ai/v1 (internal-эндпоинт, вне песочницы не работает)
+- DEPLOY.md: добавлен §12 «ASR / TTS / LLM — конфигурация z-ai-web-dev-sdk» — места поиска конфига (с предостережением про .next/standalone, пересоздаваемый сборкой), формат, команда tee /etc/.z-ai-config, curl-проверка через логин, ограничения (tongtong не обучен коми — фонетическое озвучивание; ASR транскрибирует «как слышит», accuracy по Левенштейну)
+- Коммит и push документации
+
+Stage Summary:
+- Ответ пользователю: в песочнице уже работает из коробки; на VM — один файл /etc/.z-ai-config с apiKey, код менять не нужно; один конфиг на TTS+ASR+LLM
+- Документация дополнила DEPLOY.md (§12), CI проверит пуш

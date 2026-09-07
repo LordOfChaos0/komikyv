@@ -427,3 +427,69 @@ systemctl is-active komikyv && journalctl -u komikyv -n 5 --no-pager
 - `git pull` (ручной и авто-деплой из `deploy.yml`) больше никогда не конфликтует;
 - бэкап-крон из раздела 9 переключите на новый путь:
   `sqlite3 /var/lib/komikyv/custom.db ".backup /backup/komikyv-$(date +\%F).db"`.
+
+---
+
+## 12. ASR / TTS / LLM — конфигурация z-ai-web-dev-sdk
+
+Тренажёр диалогов (LLM), озвучка слов (TTS) и анализ произношения (ASR)
+работают через `z-ai-web-dev-sdk` (зависимость в package.json). Все три
+функции использует один и тот же конфиг: при первом вызове `ZAI.create()`
+SDK ищет JSON-файл `.z-ai-config` по порядку:
+
+1. `<CWD процесса>/.z-ai-config` — на VM это WorkingDirectory сервиса
+   (`.next/standalone`) — **не рекомендуется**: каталог пересоздаётся при
+   каждой сборке, конфиг теряется;
+2. `~/.z-ai-config` — home пользователя сервиса;
+3. `/etc/.z-ai-config` — системный, **рекомендуется**: переживает деплои.
+
+Формат файла:
+
+```json
+{
+  "baseUrl": "https://api.z.ai/api/paas/v4",
+  "apiKey": "<ваш API-ключ Z.ai>"
+}
+```
+
+SDK строит от `baseUrl` пути `/chat/completions`, `/audio/tts`,
+`/audio/asr` — базовый URL должен быть OpenAI-совместимым, с версией
+в пути (сверяйте актуальное значение в документации API-платформы;
+в песочнице Z.ai используется `https://internal-api.z.ai/v1`).
+
+Настройка на VM:
+
+```bash
+sudo tee /etc/.z-ai-config > /dev/null <<'EOF'
+{
+  "baseUrl": "https://api.z.ai/api/paas/v4",
+  "apiKey": "ВАШ_КЛЮЧ"
+}
+EOF
+sudo chmod 640 /etc/.z-ai-config
+sudo systemctl restart komikyv
+```
+
+Файл `.z-ai-config` в `.gitignore` — секрет в репозиторий не попадает.
+
+Проверка на VM (API требует авторизации — сначала логин):
+
+```bash
+curl -s -c /tmp/c.txt -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"student@komikyv.ru","password":"ПАРОЛЬ_ДЕМО"}'
+curl -s -b /tmp/c.txt -X POST http://localhost:3000/api/tts \
+  -H 'Content-Type: application/json' -d '{"text":"Бур"}' | head -c 120
+# нормальный ответ начинается с: {"audio":"data:audio/wav;base64,UklGR...
+journalctl -u komikyv | grep -E "TTS error|ASR error"   # диагностика ошибок
+```
+
+Ограничения (важно понимать):
+
+- TTS-голос `tongtong` — единственный в SDK; модель не обучена коми,
+  озвучивает текст фонетически (ориентир, но не эталон носителя);
+- ASR не специализируется на коми: возвращает транскрипцию «как слышит»,
+  точность считается по расстоянию Левенштейна к целевому слову;
+- параметры TTS API проекта: `voice` (по умолчанию tongtong), `speed`
+  0.5–2.0, формат wav; озвучка слов словаря кэшируется в БД
+  (`vocabulary.audioBase64`) — повторные прослушивания не тратят API.
