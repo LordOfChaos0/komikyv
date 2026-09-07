@@ -352,3 +352,78 @@ curl -X POST http://localhost:3000/api/seed
 | Письма не приходят | SMTP не настроен | Код смотрится в логах: `journalctl -u komikyv \| grep "DEV MODE"` |
 | CSRF 403 на всех POST | Часы VM сбиты / куки очищены | `timedatectl set-ntp on`, обновить страницу |
 | OAuth кнопка не появляется | Не заданы YANDEX_* | Заполнить `.env`, перезапустить сервис |
+| `git pull` на VM: «local changes to db/custom.db would be overwritten» | Живая БД пишется внутри дерева репозитория | Одноразовая миграция — раздел 11 |
+
+---
+
+## 11. Перенос рабочей БД из дерева репозитория (одноразовая миграция)
+
+Демо-база `db/custom.db` лежит в репозитории (нужна CI для пререндера),
+но на VM она становится **живой** базой: приложение пишет в неё регистрации,
+прогресс, аудит-логи. При push'е новой версии демо-базы `git pull`
+завершается ошибкой:
+
+```text
+error: Your local changes to the following files would be overwritten by merge:
+        db/custom.db
+Please commit your changes or stash them before you merge.
+```
+
+Это не поломка, а защита: git отказывается затирать живую базу демо-копией.
+Решение — один раз вынести рабочую БД за пределы дерева репозитория
+(например, `/var/lib/komikyv/custom.db`). После этого конфликты невозможны:
+`db/custom.db` в репо остаётся демо-копией для CI и свежих установок,
+а живая база живёт своей жизнью.
+
+Выполняется на VM (пример для root; при другом пользователе — через sudo):
+
+```bash
+cd ~/komikyv                                # путь к проекту на вашей VM
+
+# 1. Остановить сервис: SQLite корректно закроет файл (WAL-журнал уйдёт в основной файл)
+systemctl stop komikyv
+
+# 2. Бэкап живой БД + перенос вне дерева репозитория
+mkdir -p /var/lib/komikyv
+cp db/custom.db "/var/lib/komikyv/custom.db.bak-$(date +%F-%H%M)"
+mv db/custom.db /var/lib/komikyv/custom.db
+ls db/   # если остались custom.db-wal / custom.db-shm — скопируйте их тоже
+         # (обычно systemd-стоп сам подчищает WAL)
+
+# 3. Вернуть демо-копию из HEAD — git снова видит чистое дерево
+git checkout -- db/custom.db
+git status                                 # «nothing to commit, working tree clean»
+
+# 4. Забрать обновления (багфиксы, CI/CD, документация) — теперь без конфликтов
+git pull origin main
+
+# 5. Перевести приложение на новую БД (абсолютный путь — см. раздел 10)
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:/var/lib/komikyv/custom.db|' .env
+grep '^DATABASE_URL' .env                  # убедиться в результате
+
+# 6. Схема живой БД догоняет новый код (additive-изменения, данные не трогаются)
+export PATH="$HOME/.bun/bin:$PATH"         # bun не всегда виден в non-interactive shell
+bun install
+bunx prisma generate
+bunx prisma db push
+
+# 7. Пересборка + синхронизация .env с runtime + запуск
+bun run build
+# сервис читает .env из WorkingDirectory (.next/standalone) — синхронизируем:
+if [ -f .next/standalone/.env ]; then
+  sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:/var/lib/komikyv/custom.db|' .next/standalone/.env
+else
+  cp .env .next/standalone/.env
+fi
+systemctl start komikyv
+systemctl is-active komikyv && journalctl -u komikyv -n 5 --no-pager
+```
+
+Если сервис работает не от root (`systemctl cat komikyv | grep '^User='`),
+отдайте ему файлы: `chown -R <этот_пользователь> /var/lib/komikyv`.
+
+После миграции:
+
+- `git pull` (ручной и авто-деплой из `deploy.yml`) больше никогда не конфликтует;
+- бэкап-крон из раздела 9 переключите на новый путь:
+  `sqlite3 /var/lib/komikyv/custom.db ".backup /backup/komikyv-$(date +\%F).db"`.
