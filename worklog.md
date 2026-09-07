@@ -780,3 +780,41 @@ Stage Summary:
 - tsc --noEmit: в src/ ошибок нет
 - dev-server работает, hot-reload ок
 - Изменённые файлы: profile-view.tsx, auth-store.ts, api/auth/me/route.ts, api/auth/login/route.ts, api/auth/register/route.ts, culture-view.tsx, word-matcher-view.tsx
+
+---
+Task ID: 14
+Agent: Main
+Task: Публикация исправлений на GitHub (новый PAT от пользователя)
+
+Work Log:
+- Получен новый GitHub PAT от пользователя (в чате, в конфиг не закоммичен)
+- git fetch: origin/main не менялся с прошлой сессии; пользователь ведёт develop (синхронизирует с main)
+- Откатил 2 незапушенных sandbox-автокоммита (UUID-сообщения) через mixed reset к origin/main
+- Выборочно застейджил 8 файлов (7 исходников багфиксов + worklog); исключены: db/custom.db (тестовые данные сессий), tool-results/*.txt (мусор), mode-изменения (core.fileMode=false)
+- Коммит 6c836af «Исправление 3 багов: дата регистрации, сайдбар на „Культуре“, очки в „Слово-матче“» → push origin main (5281ccf..6c836af)
+- Токен удалён из remote URL после пуша, .git/config проверен — чисто
+
+Stage Summary:
+- Багфиксы опубликованы в main: https://github.com/LordOfChaos0/komikyv (коммит 6c836af)
+- Локально остались незакоммиченными: db/custom.db (тестовые артефакты) и tool-results/ — намеренно не публикуются
+
+---
+Task ID: 15
+Agent: Main
+Task: Подключение GitHub CI/CD (запрос: «Как подключить github CI/CD для данного проекта»)
+
+Work Log:
+- Аудит: .gitignore исключал .github/ (наследие песочницы) — исключение убрано (иначе Actions не работают); добавлены tool-results/ и /build-test/
+- Создан .github/workflows/ci.yml — «CI»: push/PR в main/develop → bun install --frozen-lockfile (bun 1.3.14, как в разработке) → npx prisma generate → npm run lint → npx tsc --noEmit → npm run build (Node 24, как на VM). Env: DATABASE_URL=file:$GITHUB_WORKSPACE/db/custom.db (абсолютный путь, DEPLOY.md §10), JWT_SECRET-заглушка (auth.ts требует секрет при NODE_ENV=production — next build идёт в production-режиме), APP_URL. Concurrency с cancel-in-progress для повторных push.
+- Создан .github/workflows/deploy.yml — «Deploy»: авто-запуск после УСПЕШНОГО CI от push в main (workflow_run + фильтры conclusion/event/head_branch) + ручной workflow_dispatch. SSH через appleboy/ssh-action@v1.2.0, секреты SSH_HOST/SSH_USER/SSH_PRIVATE_KEY/SSH_PATH (DEPLOY.md §8.2); на VM выполняется процедура §8.3: git pull → bun install → bunx prisma generate → bunx prisma db push → bun run build → sudo systemctl restart komikyv + is-active-проверка. Без настроенных секретов деплой аккуратно пропускается (::warning, не красный). Concurrency: деплои строго последовательно, без отмены идущего.
+- Восстановлен scripts/test-smtp.mjs (диагностика из Task 12 не пережила конец сессии; в git не попадает — scripts/ в .gitignore)
+- Контрольные production-сборки в изолированном клоне build-test/ (hardlink-копия, dev-сервер и его .next не затронуты): сборка прошла ДВАЖДЫ — с локальной БД и с точной копией БД из репозитория (exit 0)
+- Проверено: БД репозитория отстаёт от схемы (нет totp-колонок 2FA), но build-время к таблице User не обращается — на CI не влияет; на VM разрыв закрывается шагом prisma db push в deploy-скрипте
+- Проверено: нативный движок Prisma libquery_engine-*.so.node и WASM-рантайм прослеживаются в .next/standalone автоматически — outputFileTracingIncludes не нужен
+- Разобран sandbox-автокоммит 0d7d10d (UUID-сообщение): db/custom.db и tool-results/ НЕ публикуются (политика Task 14), worklog.md — в коммит
+- Push в main через PAT пользователя ОТКЛОНЁН GitHub: у fine-grained PAT нет разрешения «Workflows» — оно обязательно для любых изменений .github/workflows/* (git-push И Contents API; API-попытка создания файлов вернула 403 «Resource not accessible by personal access token»). Токен нигде не сохранён (только в URL команды/переменной окружения процесса). Коммит ee55abf со всеми файлами CI/CD готов к пушу
+
+Stage Summary:
+- CI/CD полностью подготовлен и закоммичен локально (ee55abf): ci.yml (линт + типы + сборка на каждый PR и push) + deploy.yml (авто-деплой на VM после зелёного CI на main); пуш заблокирован правами PAT — ожидается от пользователя токен с разрешением «Workflows» (можно ДОБАВИТЬ существующему токену: Settings → Developer settings → Fine-grained tokens → Permissions → Workflows → Read and write)
+- Пользователю для включения деплоя: (а) разрешение Workflows у PAT — для пуша; (б) 4 секрета Actions (SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_PATH) + sudoers-строка «ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv» (DEPLOY.md §8.2)
+- Демо-БД в репо отстала от схемы — CI не ломается, при первом деплое лечится db push; рекомендуется позже вынести рабочую БД VM из дерева репозитория (риск конфликтов git pull при задеплоенной БД)

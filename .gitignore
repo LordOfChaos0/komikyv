@@ -55,10 +55,11 @@ server.log
 # prisma cache + npm artifacts (проект использует bun)
 cache/
 package-lock.json
-.github/
 
 # Sandbox artifacts (not part of the product)
 download/
 scripts/
+tool-results/
+/build-test/
 dev.log
 dev.out.log

@@ -1,0 +1,101 @@
+# ============================================================
+# «Коми кыв» — авто-деплой на production VM (комикыв.рф)
+#
+# Когда запускается:
+#   - автоматически ПОСЛЕ УСПЕШНОГО CI, сработавшего от push в main;
+#   - вручную: вкладка Actions → Deploy → Run workflow.
+#
+# Что делает: подключается к VM по SSH и повторяет процедуру
+# из DEPLOY.md §8.3 (сборка выполняется на самой VM):
+#   git pull → bun install → prisma generate → prisma db push →
+#   bun run build → systemctl restart komikyv
+#
+# Необходимые секреты (Settings → Secrets and variables → Actions,
+# см. DEPLOY.md §8.2):
+#   SSH_HOST         — IP или домен VM
+#   SSH_USER         — пользователь SSH (например, ubuntu)
+#   SSH_PRIVATE_KEY  — приватный ключ (cat ~/.ssh/id_ed25519)
+#   SSH_PATH         — путь к проекту на VM (/home/ubuntu/komikyv)
+#
+# На VM один раз разрешите перезапуск сервиса без пароля:
+#   sudo visudo -f /etc/sudoers.d/komikyv-deploy
+#   ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv
+#
+# Пока секреты не заданы, деплой аккуратно пропускается
+# (не падает красным) — настройте и он заработает.
+# ============================================================
+
+name: Deploy
+
+on:
+  workflow_run:
+    # Запускается после завершения CI; фильтр «push в main» — в if задачи
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+# Деплои выполняются строго по очереди, без отмены идущего
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Деплой на VM по SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Только: ручной запуск ИЛИ успешный CI, запущенный push'ом в main
+    # (PR и push в develop деплой НЕ запускают)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Проверить, настроены ли секреты деплоя
+        id: secrets-check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          if [ -z "${SSH_HOST}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Секреты деплоя (SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_PATH) не настроены — деплой пропущен. Инструкция: DEPLOY.md, раздел 8.2"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Деплой (git pull → bun install → prisma → build → restart)
+        if: steps.secrets-check.outputs.skip != 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # прерваться при первой ошибке в скрипте
+          script_stop: true
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+            # bun ставится в ~/.bun/bin (DEPLOY.md §2) и не всегда
+            # виден в non-interactive SSH-сессии
+            export PATH="$HOME/.bun/bin:$PATH"
+
+            cd "${{ secrets.SSH_PATH }}"
+            echo "==> Было: $(git rev-parse --short HEAD)"
+            git pull origin main || {
+              echo "!! git pull не прошёл. Частая причина: локальные изменения в db/custom.db на VM."
+              echo "!! Рекомендация: перенесите рабочую БД вне репозитория (например, /var/lib/komikyv/custom.db) и укажите путь в .env → DATABASE_URL."
+              exit 1
+            }
+            echo "==> Стало: $(git rev-parse --short HEAD)"
+
+            bun install
+            bunx prisma generate
+            # применить изменения схемы (additive, демо-данные не стирает)
+            bunx prisma db push
+            bun run build
+
+            sudo systemctl restart komikyv
+            sleep 3
+            systemctl is-active --quiet komikyv
+            echo "==> OK: сервис komikyv активен, деплой завершён"
