@@ -95,6 +95,17 @@ jobs:
             bunx prisma db push
             bun run build
 
+            # .env из корня репозитория — единственный источник настроек.
+            # Каталог .next/standalone пересоздаётся при каждой сборке,
+            # поэтому .env копируем в него ПОСЛЕ build (до restart).
+            if [ -f .env ]; then
+              cp .env .next/standalone/.env
+              echo "==> .env скопирован в .next/standalone"
+            else
+              echo "!! .env не найден в корне репозитория — сервер стартует без DATABASE_URL и ключей"
+              exit 1
+            fi
+
             sudo systemctl restart komikyv
             sleep 3
             systemctl is-active --quiet komikyv

@@ -133,7 +133,8 @@ RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3000
 # переменные из .env подхватываются Next.js автоматически из
-# WorkingDirectory/.env — проверьте, что файл .next/standalone/.env существует
+# WorkingDirectory/.env — авто-деплой копирует туда .env из корня репозитория;
+# при ручной сборке скопируйте сами: cp .env .next/standalone/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -445,9 +446,11 @@ AI_CHAT_PROVIDER=zai     # zai | openai
 
 Не заданы — везде `zai` (как в песочнице, работает из коробки).
 
-> **На VM в production-режиме** переменные прописываются в ДВА места:
-> `.env` репозитория и `.next/standalone/.env` (его читает standalone-сервер,
-> см. §11), затем `systemctl restart komikyv`.
+> **На VM в production-режиме** переменные достаточно держать в `.env`
+> репозитория (корень проекта): авто-деплой копирует его в
+> `.next/standalone/.env` после сборки. При РУЧНОЙ сборке (`bun run build`)
+> скопируйте сами: `cp .env .next/standalone/.env` — standalone-каталог
+> пересоздаётся каждой сборкой.
 
 ### 12.1. zai (по умолчанию)
 
