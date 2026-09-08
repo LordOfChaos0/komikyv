@@ -322,6 +322,13 @@ ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv
 Теперь каждый `git push origin main` → CI соберёт проект на VM и
 перезапустит сервис. CI (линт + typecheck + build) гоняется на каждый PR.
 
+> **Проверьте, что деплой реально выполняется.** Пока секреты не заданы,
+> workflow завершается зелёным `success` за ~10 секунд, а шаг
+> «Деплой (git pull…)» помечается `skipped` (так задумано — не портить
+> историю запусков). Живой деплой занимает минуты: после настройки
+> откройте Actions → Deploy → последний запуск и убедитесь, что шаг
+> «Деплой» — `success`, а не `skipped`.
+
 ### 8.2.1. Включение 2FA для администратора (после обновления)
 
 1. Войдите под учётной записью администратора.
@@ -337,13 +344,17 @@ ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv
 ### 8.3. Обновление вручную (без CI)
 
 ```bash
-cd /home/ubuntu/komikyv
+cd ~/komikyv
 git pull origin main
 bun install
 bunx prisma generate
 bunx prisma db push        # применить изменения схемы (напр., поля 2FA в User)
 bun run build
+# ВАЖНО: standalone-сервер читает env только из .next/standalone,
+# а build пересоздаёт каталог — копируем .env ПОСЛЕ сборки:
+cp .env .next/standalone/.env
 cd .next/standalone && cp -r ../../.next/static .next/ && cp -r ../../public .
+cd ~/komikyv
 sudo systemctl restart komikyv
 ```
 
