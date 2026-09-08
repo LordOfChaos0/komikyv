@@ -67,9 +67,14 @@ export async function apiFetch<T = any>(
     }
   }
   if (!res.ok) {
-    const message =
+    let message =
       (typeof data === "object" && data && (data.error || data.message)) ||
       `Request failed (${res.status})`;
+    // Причина сбоя от API (например «не задан ключ…» или «HTTP 401 …»)
+    // добавляется в текст — чтобы диагностика не требовала SSH на сервер.
+    if (typeof data === "object" && typeof data?.details === "string" && data.details) {
+      message = `${message} — ${data.details.slice(0, 200)}`;
+    }
     const err = new Error(message) as any;
     err.status = res.status;
     err.data = data;
