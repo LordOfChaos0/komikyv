@@ -4,15 +4,17 @@ import type { NextConfig } from "next";
 // Content Security Policy
 // 'unsafe-inline'/'unsafe-eval' для script-src требуются Next.js
 // (инлайн-бутстрап + Turbopack HMR в dev-режиме)
+// mc.yandex.ru — Яндекс.Метрика: tag.js (script), отправка данных
+// (connect), пиксель/клик-карта (img) — см. DEPLOY.md §13
 // ============================================================
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://mc.yandex.ru",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://mc.yandex.ru",
   "font-src 'self' data:",
   "media-src 'self' blob: data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://mc.yandex.ru",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",

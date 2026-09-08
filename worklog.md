@@ -963,3 +963,21 @@ Stage Summary:
 - Пуш выполнен после получения PAT от пользователя (fine-grained, через одноразовый credential-helper, токен нигде не сохранён): e8cbb50..1936460
 - CI на 1936460: completed/success; Deploy на 1936460: completed/success — VM обновлена авто-деплоем (.env скопирован в standalone автоматически)
 - Прод проверен: https://комикыв.рф → HTTP 200; коми-подсказка ASR активна на проде из коробки, настройки .env не требовались
+
+---
+Task ID: 23
+Agent: Main
+Task: Подключение Яндекс.Метрики + объяснение ADMIN_ACCESS_TOKEN и ALLOWED_ORIGINS
+
+Work Log:
+- Новый роут src/app/metrika.js/route.ts: сниппет tag.js генерируется сервером, METRIKA_ID подставляется ПРИ ЗАПРОСЕ (не NEXT_PUBLIC → смена ID без пересборки, достаточно systemctl restart); без ID — безвредный комментарий (no-store), с ID — официальный асинхронный сниппет (clickmap, trackLinks, accurateTrackBounce, webvisor), max-age=300
+- layout.tsx: постоянный <script src="/metrika.js" async /> — не зависит от env, без инлайн-скриптов
+- next.config.ts CSP: mc.yandex.ru добавлен в script-src/connect-src/img-src (заголовок проверен curl'ом)
+- Имя папки-роута с точкой («metrika.js») работает в dev и в production-сборке (build ✓, роут в списке)
+- Проверки: curl /metrika.js обе ветки (с ID 12345678 и без), .env песочницы восстановлен, tsc 0 ошибок, eslint чист, npm run build ✓ (с dummy JWT_SECRET, как CI)
+- DEPLOY.md: §13 «Яндекс.Метрика» (подключение без пересборки, CSP, SPA-навигация через History API, проверка), §3.1 «ADMIN_ACCESS_TOKEN и ALLOWED_ORIGINS — что защищают», строка METRIKA_ID в таблице §3; .env.example — блок METRIKA_ID
+- Коммит и push (PAT из чата), CI/Deploy проверены ниже
+
+Stage Summary:
+- Для включения метрики на проде: создать счётчик в metrika.yandex.ru → вписать METRIKA_ID в .env на VM → systemctl restart komikyv (§13.1)
+- ADMIN_ACCESS_TOKEN/ALLOWED_ORIGINS документированы в §3.1 + объяснение пользователю в чате
