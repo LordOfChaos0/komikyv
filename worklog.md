@@ -920,3 +920,21 @@ Stage Summary:
 - Пользователю достаточно вписать в .env на VM: AI_TTS/ASR/CHAT_PROVIDER=openai, AI_OPENAI_BASE_URL=https://api.aitunnel.ru/v1, AI_OPENAI_API_KEY=sk-aitunnel-..., AI_TTS_MODEL=gpt-audio-mini, AI_ASR_MODEL=gemini-3.1-flash-lite, LLM_MODEL=gemma-4-26b-a4b-it — код менять не нужно
 - Совместимость с "капризными" моделями агрегаторов обеспечена автоматически (system-role fallback, speed/format fallback, маппинг голосов)
 - В песочнице по-прежнему дефолт zai (живой round-trip прошёл), CI зелёный
+
+---
+Task ID: 21
+Agent: Main
+Task: Диагностика «не удалось синтезировать аудио / распознать речь» на проде
+
+Work Log:
+- Сквозной HTTP-тест в песочнице (scripts/test-tts-asr-http.mjs): регистрация (devCode) → логин → POST /api/tts → POST /api/asr round-trip — 5/5 ✓; код приложения на 8050e27 работоспособен, проблема не в коде
+- Временный тест-аккаунт удалён, демо-БД восстановлена байт-в-байт (git checkout)
+- Первопричина найдена: deploy.yml НЕ переносил .env в .next/standalive после bun run build — standalone-сервер читает env только оттуда (WorkingDirectory=…/.next/standalone, DEPLOY §5). После включения авто-деплоя (секреты SSH заданы — прогон Deploy на 8050e27 прошёл success) каждая пересборка затирала настройки; сервер оставался без ключей aitunnel → провайдер падал обратно в zai → 402-е TTS/ASR
+- Фикс deploy.yml (e8cbb50): после build — cp .env .next/standalone/.env + echo; отсутствие .env = громкая ошибка деплоя (exit 1)
+- UX-фикс (8050e27): apiFetch теперь добавляет details (точную причину: «не задан ключ», «HTTP 401 …») в toast — диагностика без SSH; раньше фронт показывал только общий текст
+- DEPLOY.md §5/§12 переписаны: источник настроек — один файл (.env в корне репо), деплой копирует сам; при ручной сборке — cp вручную
+- Пуши 8050e27 и e8cbb50: CI success; Deploy на e8cbb50 success — VM обновлена, .env скопирован, сервис активен; комикыв.рф отвечает HTTP 200
+
+Stage Summary:
+- Ждём от пользователя перепроверку TTS/ASR на проде: если в репо-.env на VM есть блок aitunnel — уже должно работать; если нет — дописать блок и перезапустить (или Run workflow)
+- Диагностическая цепочка на случай повторных сбоев: toast с причиной → journalctl -u komikyv | grep -E "TTS error|ASR error" → curl ключа прямо в шлюз (§12.4)
