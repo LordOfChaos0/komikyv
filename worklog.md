@@ -899,3 +899,24 @@ Stage Summary:
 - Проект больше не привязан к Z.ai: смена провайдера = переменные окружения, код менять не нужно; в песочнице поведение по умолчанию не изменилось (zai, проверено живым тестом)
 - Сценарии: OpenAI/Groq ключи, Yandex SpeechKit (YC_API_KEY+folder_id), локальные whisper-серверы через AI_OPENAI_BASE_URL=http://127.0.0.1:PORT/v1, любые OpenAI-совместимые гейтвеи с кастомными путями
 - Для Yandex ASR из браузера на VM нужен ffmpeg (ремукс webm→ogg, без перекодирования)
+
+---
+Task ID: 20
+Agent: Main
+Task: Подгонка AI-слоя под конкретный шлюз пользователя api.aitunnel.ru (LLM gemma-4-26b-a4b-it, TTS gpt-audio-mini, ASR gemini-3.1-flash-lite)
+
+Work Log:
+- Аудит готового слоя ai-providers.ts под специфику моделей из запроса; проб api.aitunnel.ru из песочницы: HTTP 401 без ключа — шлюз живой, OpenAI-конвенция
+- src/lib/ai-providers.ts, openaiChat: Gemma не принимает role:system — при 400/422 системные сообщения вливаются в первый user-тик (mergeSystemIntoUser) и запрос повторяется автоматически
+- src/lib/ai-providers.ts, openaiTts: gpt-audio-mini у части шлюзов отвергает speed/response_format — лестница упрощений (speed+wav → без speed → без response_format), ретраи только на 400/422; голос tongtong (z.ai) маппится в AI_TTS_VOICE; TtsResult.mime теперь фактический (из content-type ответа, не литерал "audio/wav")
+- defaultChatModel(): приоритет AI_CHAT_MODEL → LLM_MODEL → дефолт провайдера
+- /api/tts: data-URL строится из mime результата (mp3 от шлюза больше не помечается как wav)
+- Тесты scripts/test-ai-providers.ts (bun): мок-шлюз с имитацией капризов aitunnel (gemma без system, gpt-audio без speed, multipart ASR c gemini-3.1-flash-lite) + живой zai (TTS→ASR round-trip, LLM) — 14/14 ✓; tsc --noEmit: 0 ошибок в src/; eslint чист; dev-сервер компилирует роуты без ошибок
+- DEPLOY.md §12: готовый env-блок для aitunnel, пояснение про два места .env на VM (репо + .next/standalone), curl-проверка ключа прямо в шлюз; .env.example — раскомментированный пример aitunnel
+- Демо-БД перед пушем: 5 аккаунтов, кодов верификации нет; авто-коммит с UUID-сообщением переименован через amend (f37aaca)
+- Push c043615..d40a972 (f37aaca + d40a972), CI run на d40a972: completed/success (~40 с)
+
+Stage Summary:
+- Пользователю достаточно вписать в .env на VM: AI_TTS/ASR/CHAT_PROVIDER=openai, AI_OPENAI_BASE_URL=https://api.aitunnel.ru/v1, AI_OPENAI_API_KEY=sk-aitunnel-..., AI_TTS_MODEL=gpt-audio-mini, AI_ASR_MODEL=gemini-3.1-flash-lite, LLM_MODEL=gemma-4-26b-a4b-it — код менять не нужно
+- Совместимость с "капризными" моделями агрегаторов обеспечена автоматически (system-role fallback, speed/format fallback, маппинг голосов)
+- В песочнице по-прежнему дефолт zai (живой round-trip прошёл), CI зелёный
