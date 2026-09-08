@@ -30,14 +30,26 @@ export async function POST(req: NextRequest) {
   const audio = Buffer.from(base64, "base64");
 
   try {
+    // Коми-подсказка провайдеру (contextual biasing): приложение заранее знает
+    // ожидаемую словоформу упражнения — передаём её ASR, чтобы декодер не
+    // «сваливался» в русскую орфографию (коми записывается кириллицей, и
+    // мультиязычные модели без подсказки транскрибируют «как русский»).
+    // Готового языка «kv» ни у одного провайдера нет — это основной приём.
+    // Выключается AI_ASR_HINT=0, если подсказка кажется «подсказыванием ответа».
+    const hintOff = /^(0|false|no|off)$/i.test((process.env.AI_ASR_HINT || "").trim());
+    const prompt =
+      target && !hintOff
+        ? `Речь на коми языке. Запиши услышанное коми буквами, дословно. Ожидаемая фраза упражнения: «${target}»`
+        : undefined;
+
     // Провайдер выбирается env (zai | openai | yandex) — см. src/lib/ai-providers.ts
-    const { text } = await asrTranscribe(audio, mime);
+    const { text } = await asrTranscribe(audio, mime, prompt ? { prompt } : {});
 
     // If target provided, compute accuracy using Levenshtein distance
     let accuracy = 0;
     let feedback = "";
     if (target && text) {
-      accuracy = computeAccuracy(text.toLowerCase().trim(), target.toLowerCase().trim());
+      accuracy = computeAccuracy(normalizeForComparison(text), normalizeForComparison(target));
       if (accuracy === 100) feedback = "Отличное произношение!";
       else if (accuracy >= 80) feedback = "Хорошо! Почти идеально.";
       else if (accuracy >= 60) feedback = "Неплохо, но есть над чем поработать.";
@@ -65,6 +77,23 @@ function computeAccuracy(a: string, b: string): number {
   const dist = levenshtein(a, b);
   const maxLen = Math.max(a.length, b.length);
   return Math.max(0, Math.round((1 - dist / maxLen) * 100));
+}
+
+/**
+ * Нормализация перед сравнением: убираем пунктуацию и лишние пробелы,
+ * схлопываем і/и — ASR практически не различает эти коми буквы (обе
+ * читаются близко, а модели обучены в основном на русском/украинском,
+ * где і в коми-словах не встречается). Схлопывание симметрично для
+ * транскрипта и образца, так что реальное замедление/палатализация
+ * продолжает считаться ошибкой через остальные буквы.
+ */
+function normalizeForComparison(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/і/g, "и")
+    .replace(/[.,!?;:«»„“”"'‘’()\[\]{}\-–—_/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function levenshtein(a: string, b: string): number {

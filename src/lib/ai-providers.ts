@@ -51,6 +51,18 @@ export interface AsrResult {
   text: string;
 }
 
+export interface AsrOptions {
+  /**
+   * Подсказка провайдеру — ожидаемый текст (contextual biasing).
+   * Whisper-совместимые декодеры и LLM-ASR (gpt-4o-transcribe, Gemini)
+   * учитывают её и не «сваливаются» в русскую орфографию — это главный
+   * инструмент распознавания коми, ведь готового языка «kv» ни у кого нет.
+   */
+  prompt?: string;
+  /** Код языка ISO-639-1 (для коми не существует — поле для экспериментов) */
+  language?: string;
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -86,16 +98,28 @@ export function defaultChatModel(): string {
 
 // ---------- Конфигурации провайдеров ----------
 
-const openaiConfig = () => ({
-  baseUrl: env("AI_OPENAI_BASE_URL", "OPENAI_BASE_URL") || "https://api.openai.com/v1",
-  apiKey: env("AI_OPENAI_API_KEY", "OPENAI_API_KEY") || "",
-  ttsPath: env("AI_TTS_PATH") || "/audio/speech",
-  asrPath: env("AI_ASR_PATH") || "/audio/transcriptions",
-  chatPath: env("AI_CHAT_PATH") || "/chat/completions",
-  ttsModel: env("AI_TTS_MODEL") || "tts-1",
-  ttsVoice: env("AI_TTS_VOICE") || "alloy",
-  asrModel: env("AI_ASR_MODEL") || "whisper-1",
-});
+const openaiConfig = () => {
+  const sharedBase = env("AI_OPENAI_BASE_URL", "OPENAI_BASE_URL") || "https://api.openai.com/v1";
+  const ownAsrBase = env("AI_ASR_BASE_URL");
+  return {
+    baseUrl: sharedBase,
+    apiKey: env("AI_OPENAI_API_KEY", "OPENAI_API_KEY") || "",
+    ttsPath: env("AI_TTS_PATH") || "/audio/speech",
+    asrPath: env("AI_ASR_PATH") || "/audio/transcriptions",
+    chatPath: env("AI_CHAT_PATH") || "/chat/completions",
+    ttsModel: env("AI_TTS_MODEL") || "tts-1",
+    ttsVoice: env("AI_TTS_VOICE") || "alloy",
+    asrModel: env("AI_ASR_MODEL") || "whisper-1",
+    // ASR можно направить на ДРУГОЙ сервер, не трогая TTS/LLM: сценарий —
+    // локальный дообученный на коми Whisper при TTS/чате на общем шлюзе.
+    // Отдельный URL = отдельные учётные данные: ключ общего шлюза туда не
+    // отправляется, если явно не задан AI_ASR_API_KEY (локальные whisper-серверы
+    // обычно работают без авторизации).
+    asrBaseUrl: ownAsrBase || sharedBase,
+    asrApiKey: env("AI_ASR_API_KEY") || (ownAsrBase ? "" : env("AI_OPENAI_API_KEY", "OPENAI_API_KEY") || ""),
+    asrLanguage: env("AI_ASR_LANGUAGE") || "",
+  };
+};
 
 const yandexConfig = () => ({
   apiKey: env("AI_YANDEX_API_KEY", "YC_API_KEY", "YANDEX_API_KEY") || "",
@@ -284,27 +308,87 @@ async function zaiAsr(audio: Buffer): Promise<AsrResult> {
   return { text: String(text) };
 }
 
-/** OpenAI-совместимый ASR: POST {base}/audio/transcriptions (multipart) */
-async function openaiAsr(audio: Buffer, mime: string): Promise<AsrResult> {
-  const c = openaiConfig();
-  if (!c.apiKey) {
-    throw new Error("AI_ASR_PROVIDER=openai: не задан ключ — заполните AI_OPENAI_API_KEY (или OPENAI_API_KEY)");
+/** localhost/локальная сеть: домашние whisper-серверы обычно без авторизации */
+function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".local") ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  } catch {
+    return false;
   }
-  const form = new FormData();
-  const bytes = new Uint8Array(audio.byteLength);
-  bytes.set(audio);
-  form.append("file", new Blob([bytes], { type: mime || "audio/webm" }), `audio.${mimeToExt(mime)}`);
-  form.append("model", c.asrModel);
-  const res = await fetch(c.baseUrl + c.asrPath, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}` },
-    body: form,
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw await httpError("OpenAI-совместимый ASR", res);
-  const data: any = await res.json();
-  const text = typeof data === "string" ? data : (data?.text || data?.transcript || "");
-  return { text: String(text) };
+}
+
+/**
+ * OpenAI-совместимый ASR: POST {base}/audio/transcriptions (multipart).
+ *
+ * Распознавание коми (готового языка «kv» ни у одного провайдера нет) —
+ * через contextual biasing: opts.prompt с ожидаемой фразой смещает декодер
+ * к коми-орфографии. Строгие шлюзы, отвергающие prompt/language (400/422),
+ * получают повтор без них — как TTS-адаптер упрощает запрос.
+ *
+ * URL и ключ ASR переопределяются ОТДЕЛЬНО от TTS/чата (AI_ASR_BASE_URL /
+ * AI_ASR_API_KEY): так ASR можно направить на локальный коми-Whisper
+ * (faster-whisper / whisper.cpp сервер с OpenAI-совместимым API), оставив
+ * TTS и LLM на общем шлюзе. Локальные хосты без ключа работают без Authorization.
+ */
+async function openaiAsr(audio: Buffer, mime: string, opts: AsrOptions = {}): Promise<AsrResult> {
+  const c = openaiConfig();
+  const baseUrl = c.asrBaseUrl;
+  const apiKey = c.asrApiKey;
+  if (!apiKey && !isLocalBaseUrl(baseUrl)) {
+    throw new Error("AI_ASR_PROVIDER=openai: не задан ключ — заполните AI_ASR_API_KEY (или AI_OPENAI_API_KEY)");
+  }
+  const language = (opts.language || c.asrLanguage || "").trim();
+  // Whisper ограничивает prompt ~224 токенами — режем с запасом
+  const prompt = (opts.prompt || "").trim().slice(0, 800);
+
+  // Лестница попыток: полная → без language → без подсказок (для строгих шлюзов)
+  const attempts: Record<string, string>[] = [];
+  const full: Record<string, string> = {};
+  if (prompt) full.prompt = prompt;
+  if (language) full.language = language;
+  attempts.push(full);
+  if (prompt) attempts.push({ prompt });
+  attempts.push({});
+  const unique = attempts.filter(
+    (a, i) => attempts.findIndex((b) => JSON.stringify(b) === JSON.stringify(a)) === i
+  );
+
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  let lastError: Error | null = null;
+  for (const extra of unique) {
+    const form = new FormData();
+    const bytes = new Uint8Array(audio.byteLength);
+    bytes.set(audio);
+    form.append("file", new Blob([bytes], { type: mime || "audio/webm" }), `audio.${mimeToExt(mime)}`);
+    form.append("model", c.asrModel);
+    for (const [k, v] of Object.entries(extra)) form.append(k, v);
+    const res = await fetch(baseUrl + c.asrPath, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const text = typeof data === "string" ? data : (data?.text || data?.transcript || "");
+      return { text: String(text) };
+    }
+    lastError = await httpError("OpenAI-совместимый ASR", res);
+    // ретраи имеют смысл только при 400/422; 401/403/404/5xx упрощением не лечатся
+    if (res.status !== 400 && res.status !== 422) break;
+  }
+  throw lastError || new Error("OpenAI-совместимый ASR: неизвестная ошибка");
 }
 
 /** Yandex SpeechKit ASR v2: понимает только OggOpus; webm переконтейнируем через ffmpeg */
@@ -349,13 +433,20 @@ async function yandexAsr(audio: Buffer, mime: string): Promise<AsrResult> {
 /**
  * Распознавание речи. Провайдер — AI_ASR_PROVIDER (по умолчанию zai).
  * mime — тип входного аудио (браузер MediaRecorder шлёт audio/webm).
+ * opts.prompt — подсказка с ожидаемой фразой (см. /api/asr): zai SDK и
+ * Yandex v2-REST подсказку не принимают — там она просто игнорируется,
+ * OpenAI-совместимые провайдеры используют её для смещения к коми-орфографии.
  */
-export async function asrTranscribe(audio: Buffer, mime = "audio/webm"): Promise<AsrResult> {
+export async function asrTranscribe(
+  audio: Buffer,
+  mime = "audio/webm",
+  opts: AsrOptions = {}
+): Promise<AsrResult> {
   switch (asrProvider()) {
     case "zai":
       return zaiAsr(audio);
     case "openai":
-      return openaiAsr(audio, mime);
+      return openaiAsr(audio, mime, opts);
     case "yandex":
     case "speechkit":
       return yandexAsr(audio, mime);
