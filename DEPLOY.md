@@ -445,6 +445,10 @@ AI_CHAT_PROVIDER=zai     # zai | openai
 
 Не заданы — везде `zai` (как в песочнице, работает из коробки).
 
+> **На VM в production-режиме** переменные прописываются в ДВА места:
+> `.env` репозитория и `.next/standalone/.env` (его читает standalone-сервер,
+> см. §11), затем `systemctl restart komikyv`.
+
 ### 12.1. zai (по умолчанию)
 
 Конфиг `.z-ai-config` (JSON) ищется по порядку: CWD процесса
@@ -478,6 +482,31 @@ LLM_MODEL=gpt-4o-mini         # при AI_CHAT_PROVIDER=openai
 `AI_CHAT_PATH` (`/chat/completions`). Локальный пример: поднять
 whisper-сервер на VM и указать `AI_OPENAI_BASE_URL=http://127.0.0.1:8000/v1`.
 
+Готовый пример — агрегатор **aitunnel.ru** (один ключ на LLM + TTS + ASR,
+модели из его каталога):
+
+```env
+AI_TTS_PROVIDER=openai
+AI_ASR_PROVIDER=openai
+AI_CHAT_PROVIDER=openai
+AI_OPENAI_BASE_URL=https://api.aitunnel.ru/v1
+AI_OPENAI_API_KEY=sk-aitunnel-<ваш ключ>
+AI_TTS_MODEL=gpt-audio-mini
+AI_TTS_VOICE=alloy
+AI_ASR_MODEL=gemini-3.1-flash-lite
+LLM_MODEL=gemma-4-26b-a4b-it
+```
+
+Особенности этих моделей уже учтены в коде (обрабатывается автоматически):
+
+- **Gemma** не принимает `role: system` — при ошибке 400 системный промпт
+  тренажёра вливается в первый user-тик и запрос повторяется;
+- **gpt-audio-mini** у части шлюзов не принимает `speed` (или
+  `response_format`) — запрос автоматически упрощается и повторяется;
+- голос z.ai `tongtong` подменяется на `AI_TTS_VOICE` (`alloy` по умолчанию);
+  голоса gpt-audio: alloy, ash, ballad, coral, echo, fable, onyx, nova,
+  sage, shimmer.
+
 ### 12.3. yandex — Yandex SpeechKit
 
 ```env
@@ -494,6 +523,22 @@ ASR (v2 REST) принимает только OggOpus: записи браузе
 Работа через прокси: `AI_YANDEX_TTS_URL` / `AI_YANDEX_ASR_URL`.
 
 ### 12.4. Проверка (на VM, API требует авторизации)
+
+Сначала — быстрый тест ключа прямо в шлюз (без приложения; подставьте
+свой ключ и модели):
+
+```bash
+source .env
+curl -s "$AI_OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $AI_OPENAI_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gemma-4-26b-a4b-it","messages":[{"role":"user","content":"привет"}]}' | head -c 300
+curl -s "$AI_OPENAI_BASE_URL/audio/speech" \
+  -H "Authorization: Bearer $AI_OPENAI_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-audio-mini","input":"Бур","voice":"alloy","response_format":"wav"}' \
+  --output /tmp/t.wav && file /tmp/t.wav   # должно быть WAV/RIFF
+```
+
+Затем — через приложение:
 
 ```bash
 curl -s -c /tmp/c.txt -o /dev/null http://localhost:3000/api/auth/me   # получить CSRF-куку

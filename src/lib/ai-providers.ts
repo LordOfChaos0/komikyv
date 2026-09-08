@@ -20,7 +20,8 @@
 //   AI_ASR_PROVIDER=zai|openai|yandex   (по умолчанию zai)
 //   AI_CHAT_PROVIDER=zai|openai         (по умолчанию zai)
 //
-// Контракт модуля: TTS всегда возвращает WAV (Buffer), ASR принимает
+// Контракт модуля: TTS возвращает аудио и фактический MIME (zai/yandex — WAV,
+// openai-шлюз может отдать mp3 — MIME берётся из ответа), ASR принимает
 // аудио из браузера (webm/ogg/wav/mp3) и возвращает текст, chat
 // возвращает completion в OpenAI-форме (choices[0].message.content).
 // Полное описание настроек — DEPLOY.md §12.
@@ -39,9 +40,10 @@ export interface TtsOptions {
 }
 
 export interface TtsResult {
-  /** Синтезированное аудио, всегда WAV */
+  /** Синтезированное аудио (zai/yandex — WAV; openai-шлюз может вернуть mp3) */
   audio: Buffer;
-  mime: "audio/wav";
+  /** MIME ответа — используется роутом /api/tts в data-URL */
+  mime: string;
 }
 
 export interface AsrResult {
@@ -75,8 +77,10 @@ const ttsProvider = () => (env("AI_TTS_PROVIDER") || "zai").toLowerCase();
 const asrProvider = () => (env("AI_ASR_PROVIDER") || "zai").toLowerCase();
 const chatProvider = () => (env("AI_CHAT_PROVIDER") || "zai").toLowerCase();
 
-/** Модель LLM по умолчанию для текущего провайдера чата */
+/** Модель LLM по умолчанию: AI_CHAT_MODEL → LLM_MODEL → дефолт провайдера */
 export function defaultChatModel(): string {
+  const explicit = env("AI_CHAT_MODEL", "LLM_MODEL");
+  if (explicit) return explicit;
   return chatProvider() === "openai" ? "gpt-4o-mini" : "qwen3.8-flash";
 }
 
@@ -181,29 +185,53 @@ async function zaiTts(text: string, opts: TtsOptions): Promise<TtsResult> {
   return { audio: Buffer.from(new Uint8Array(arrayBuffer)), mime: "audio/wav" };
 }
 
-/** OpenAI-совместимый TTS: POST {base}/audio/speech → бинарный WAV */
+/** Голоса, которые понимают OpenAI-совместимые TTS (tts-1 / gpt-audio-mini) */
+const OPENAI_TTS_VOICES = new Set([
+  "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse",
+]);
+
+/**
+ * OpenAI-совместимый TTS: POST {base}/audio/speech → аудио (обычно WAV).
+ *
+ * Шлюзы и модели капризны: одни не принимают speed (gpt-audio-mini у части
+ * агрегаторов), другие — response_format. Поэтому при 400/422 запрос
+ * автоматически упрощается: без speed → без response_format. Голоса z.ai
+ * (tongtong) OpenAI-совместимым API незнакомы — подставляется AI_TTS_VOICE.
+ */
 async function openaiTts(text: string, opts: TtsOptions): Promise<TtsResult> {
   const c = openaiConfig();
   if (!c.apiKey) {
     throw new Error("AI_TTS_PROVIDER=openai: не задан ключ — заполните AI_OPENAI_API_KEY (или OPENAI_API_KEY)");
   }
-  const speed = opts.speed ?? 1.0;
-  const res = await fetch(c.baseUrl + c.ttsPath, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: c.ttsModel,
-      input: text,
-      voice: opts.voice || c.ttsVoice,
-      response_format: "wav",
-      speed: Math.min(4, Math.max(0.25, speed)),
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) throw await httpError("OpenAI-совместимый TTS", res);
-  const arrayBuffer = await res.arrayBuffer();
-  if (arrayBuffer.byteLength === 0) throw new Error("OpenAI-совместимый TTS: пустой ответ");
-  return { audio: Buffer.from(new Uint8Array(arrayBuffer)), mime: "audio/wav" };
+  const voice = opts.voice && OPENAI_TTS_VOICES.has(opts.voice) ? opts.voice : c.ttsVoice;
+  const speed = Math.min(4, Math.max(0.25, opts.speed ?? 1.0));
+
+  const attempts = [
+    { model: c.ttsModel, input: text, voice, speed, response_format: "wav" },
+    { model: c.ttsModel, input: text, voice, response_format: "wav" },
+    { model: c.ttsModel, input: text, voice },
+  ];
+
+  let lastError: Error | null = null;
+  for (const body of attempts) {
+    const res = await fetch(c.baseUrl + c.ttsPath, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (res.ok) {
+      const arrayBuffer = await res.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) throw new Error("OpenAI-совместимый TTS: пустой ответ");
+      const contentType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      const mime = contentType.startsWith("audio/") ? contentType : "audio/wav";
+      return { audio: Buffer.from(new Uint8Array(arrayBuffer)), mime };
+    }
+    lastError = await httpError("OpenAI-совместимый TTS", res);
+    // ретраи имеют смысл только при 400/422; 401/403/404/5xx упрощением не лечатся
+    if (res.status !== 400 && res.status !== 422) break;
+  }
+  throw lastError || new Error("OpenAI-совместимый TTS: неизвестная ошибка");
 }
 
 /** Yandex SpeechKit TTS v2: lpcm 48kHz → оборачиваем в WAV */
@@ -344,23 +372,49 @@ async function zaiChat(params: ChatCompletionParams): Promise<any> {
   return zai.chat.completions.create(params as any);
 }
 
-/** OpenAI-совместимый чат: POST {base}/chat/completions → completion (OpenAI-форма) */
+/** Сливает system-сообщения в первый user-тик — модели семейства Gemma не принимают role: system */
+function mergeSystemIntoUser(messages: ChatMessage[]): ChatMessage[] {
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const rest = messages.filter((m) => m.role !== "system");
+  const firstUser = rest.findIndex((m) => m.role === "user");
+  if (firstUser === -1) return [{ role: "user", content: systemText }, ...rest];
+  return [
+    ...rest.slice(0, firstUser),
+    { role: "user", content: `${systemText}\n\n${rest[firstUser].content}` },
+    ...rest.slice(firstUser + 1),
+  ];
+}
+
+/**
+ * OpenAI-совместимый чат: POST {base}/chat/completions → completion (OpenAI-форма).
+ * Если модель отвергла роль system (400/422 — типично для Gemma), системный
+ * промпт автоматически вливается в первый user-тик и запрос повторяется.
+ */
 async function openaiChat(params: ChatCompletionParams): Promise<any> {
   const c = openaiConfig();
   if (!c.apiKey) {
     throw new Error("AI_CHAT_PROVIDER=openai: не задан ключ — заполните AI_OPENAI_API_KEY (или OPENAI_API_KEY)");
   }
-  const res = await fetch(c.baseUrl + c.chatPath, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: params.model,
-      messages: params.messages,
-      temperature: params.temperature,
-      max_tokens: params.max_tokens,
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
+  const doFetch = (messages: ChatMessage[]) =>
+    fetch(c.baseUrl + c.chatPath, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: params.model,
+        messages,
+        temperature: params.temperature,
+        max_tokens: params.max_tokens,
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+
+  let res = await doFetch(params.messages);
+  if ((res.status === 400 || res.status === 422) && params.messages.some((m) => m.role === "system")) {
+    res = await doFetch(mergeSystemIntoUser(params.messages));
+  }
   if (!res.ok) throw await httpError("OpenAI-совместимый LLM", res);
   return await res.json();
 }

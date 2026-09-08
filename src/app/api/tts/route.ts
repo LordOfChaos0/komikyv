@@ -42,9 +42,9 @@ export async function POST(req: NextRequest) {
 
   try {
     // Провайдер выбирается env (zai | openai | yandex) — см. src/lib/ai-providers.ts
-    const { audio } = await ttsSynthesize(text, { voice, speed });
+    const { audio, mime } = await ttsSynthesize(text, { voice, speed });
     const base64Audio = audio.toString("base64");
-    const dataUrl = `data:audio/wav;base64,${base64Audio}`;
+    const dataUrl = `data:${mime};base64,${base64Audio}`;
 
     // Cache for vocabulary
     if (vocabId) {
