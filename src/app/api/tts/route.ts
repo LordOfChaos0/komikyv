@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import ZAI from "z-ai-web-dev-sdk";
+import { ttsSynthesize } from "@/lib/ai-providers";
 
 // POST /api/tts — synthesize speech for Komi/Russian text
 // Body: { text: string, voice?: string, speed?: number, vocabId?: string }
@@ -41,20 +41,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const zai = await ZAI.create();
-    const response = await zai.audio.tts.create({
-      input: text,
-      voice: voice || "tongtong",
-      speed: speed ?? 1.0,
-      response_format: "wav",
-      stream: false,
-    } as any);
-
-    // The SDK returns a standard Response object
-    const arrayBuffer = await (response as Response).arrayBuffer();
-    const buffer = Buffer.from(new Uint8Array(arrayBuffer));
-    const base64Audio = buffer.toString("base64");
-    const dataUrl = `data:audio/wav;base64,${base64Audio}`;
+    // Провайдер выбирается env (zai | openai | yandex) — см. src/lib/ai-providers.ts
+    const { audio, mime } = await ttsSynthesize(text, { voice, speed });
+    const base64Audio = audio.toString("base64");
+    const dataUrl = `data:${mime};base64,${base64Audio}`;
 
     // Cache for vocabulary
     if (vocabId) {

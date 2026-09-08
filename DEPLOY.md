@@ -84,11 +84,45 @@ cp .env.example .env
 |------------|-------------|----------|
 | `DATABASE_URL` | да | `file:/var/www/komikyv/db/custom.db` (абсолютный путь!) |
 | `JWT_SECRET` | **да в production** | `openssl rand -hex 32` — без неё приложение не стартует |
-| `ADMIN_ACCESS_TOKEN` | нет | Доп. токен для /api/admin/* (`openssl rand -hex 16`) |
-| `ALLOWED_ORIGINS` | нет | Кросс-доменные origin через запятую (для API-доступа извне) |
+| `ADMIN_ACCESS_TOKEN` | нет | Доп. токен для /api/admin/* (`openssl rand -hex 16`) — см. §3.1 |
+| `ALLOWED_ORIGINS` | нет | Кросс-доменные origin через запятую — см. §3.1 |
 | `SMTP_HOST/PORT/USER/PASS/FROM` | нет | Яндекс SMTP: восстановление пароля и подтверждение email |
 | `YANDEX_CLIENT_ID/SECRET` | нет | OAuth-вход через Яндекс ID |
 | `APP_URL` | нет | `https://комикыв.рф` — для OAuth redirect URI (в punycode: https://xn--b1alfbil8g.xn--p1ai) |
+| `METRIKA_ID` | нет | Номер счётчика Яндекс.Метрики — подключение без пересборки (§13) |
+
+### 3.1. ADMIN_ACCESS_TOKEN и ALLOWED_ORIGINS — что защищают
+
+**`ADMIN_ACCESS_TOKEN`** — второй слой защиты админ-API (`/api/admin/*`).
+Работает ВМЕСТЕ с ролями (RBAC), а не вместо: пользователь всё равно
+должен быть залогинен с ролью администратора, но если переменная
+задана — каждый запрос к админ-API дополнительно обязан нести
+заголовок `X-Admin-Token` с точным совпадением значения.
+
+- **От чего защищает:** угнанную сессию (украденные cookies сами по
+  себе не дают доступ к админ-API — нужен ещё и токен) и XSS
+  (вредоносный скрипт в браузере не знает значения).
+- **Как включить:** `openssl rand -hex 16` → вписать в `.env` →
+  перезапустить сервис. При входе в админ-панель появится диалог
+  «Токен администратора»: значение вводится один раз и сохраняется
+  только в том браузере.
+- **Пусто (по умолчанию)** — проверка выключена, доступ определяется
+  только ролью. Для прода задать настоятельно рекомендуется.
+
+**`ALLOWED_ORIGINS`** — белый список источников для кросс-доменных
+запросов к API из браузера (CORS).
+
+- **Пусто (по умолчанию)** = API доступно только со страниц самого
+  сайта (same-origin): чужие сайты в браузере не смогут читать
+  ответы API с куками пользователя — заголовки
+  `Access-Control-Allow-Origin` не выдаются.
+- **Когда задавать:** если появится мобильное приложение, второй
+  фронтенд на другом домене или сторонняя интеграция, которым нужен
+  доступ к API из браузера: `ALLOWED_ORIGINS=https://app.example.ru`
+  (через запятую для нескольких).
+- **Важно понимать:** CORS — механизм браузерный. Серверные клиенты
+  (curl, бэкенды) этим ограничением не затрагиваются — для них API
+  доступно всегда (защита — авторизация и роли, не CORS).
 
 Минимальный `.env` для теста:
 
@@ -133,7 +167,8 @@ RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3000
 # переменные из .env подхватываются Next.js автоматически из
-# WorkingDirectory/.env — проверьте, что файл .next/standalone/.env существует
+# WorkingDirectory/.env — авто-деплой копирует туда .env из корня репозитория;
+# при ручной сборке скопируйте сами: cp .env .next/standalone/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -287,6 +322,13 @@ ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv
 Теперь каждый `git push origin main` → CI соберёт проект на VM и
 перезапустит сервис. CI (линт + typecheck + build) гоняется на каждый PR.
 
+> **Проверьте, что деплой реально выполняется.** Пока секреты не заданы,
+> workflow завершается зелёным `success` за ~10 секунд, а шаг
+> «Деплой (git pull…)» помечается `skipped` (так задумано — не портить
+> историю запусков). Живой деплой занимает минуты: после настройки
+> откройте Actions → Deploy → последний запуск и убедитесь, что шаг
+> «Деплой» — `success`, а не `skipped`.
+
 ### 8.2.1. Включение 2FA для администратора (после обновления)
 
 1. Войдите под учётной записью администратора.
@@ -302,13 +344,17 @@ ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart komikyv
 ### 8.3. Обновление вручную (без CI)
 
 ```bash
-cd /home/ubuntu/komikyv
+cd ~/komikyv
 git pull origin main
 bun install
 bunx prisma generate
 bunx prisma db push        # применить изменения схемы (напр., поля 2FA в User)
 bun run build
+# ВАЖНО: standalone-сервер читает env только из .next/standalone,
+# а build пересоздаёт каталог — копируем .env ПОСЛЕ сборки:
+cp .env .next/standalone/.env
 cd .next/standalone && cp -r ../../.next/static .next/ && cp -r ../../public .
+cd ~/komikyv
 sudo systemctl restart komikyv
 ```
 
@@ -352,3 +398,322 @@ curl -X POST http://localhost:3000/api/seed
 | Письма не приходят | SMTP не настроен | Код смотрится в логах: `journalctl -u komikyv \| grep "DEV MODE"` |
 | CSRF 403 на всех POST | Часы VM сбиты / куки очищены | `timedatectl set-ntp on`, обновить страницу |
 | OAuth кнопка не появляется | Не заданы YANDEX_* | Заполнить `.env`, перезапустить сервис |
+| `git pull` на VM: «local changes to db/custom.db would be overwritten» | Живая БД пишется внутри дерева репозитория | Одноразовая миграция — раздел 11 |
+
+---
+
+## 11. Перенос рабочей БД из дерева репозитория (одноразовая миграция)
+
+Демо-база `db/custom.db` лежит в репозитории (нужна CI для пререндера),
+но на VM она становится **живой** базой: приложение пишет в неё регистрации,
+прогресс, аудит-логи. При push'е новой версии демо-базы `git pull`
+завершается ошибкой:
+
+```text
+error: Your local changes to the following files would be overwritten by merge:
+        db/custom.db
+Please commit your changes or stash them before you merge.
+```
+
+Это не поломка, а защита: git отказывается затирать живую базу демо-копией.
+Решение — один раз вынести рабочую БД за пределы дерева репозитория
+(например, `/var/lib/komikyv/custom.db`). После этого конфликты невозможны:
+`db/custom.db` в репо остаётся демо-копией для CI и свежих установок,
+а живая база живёт своей жизнью.
+
+Выполняется на VM (пример для root; при другом пользователе — через sudo):
+
+```bash
+cd ~/komikyv                                # путь к проекту на вашей VM
+
+# 1. Остановить сервис: SQLite корректно закроет файл (WAL-журнал уйдёт в основной файл)
+systemctl stop komikyv
+
+# 2. Бэкап живой БД + перенос вне дерева репозитория
+mkdir -p /var/lib/komikyv
+cp db/custom.db "/var/lib/komikyv/custom.db.bak-$(date +%F-%H%M)"
+mv db/custom.db /var/lib/komikyv/custom.db
+ls db/   # если остались custom.db-wal / custom.db-shm — скопируйте их тоже
+         # (обычно systemd-стоп сам подчищает WAL)
+
+# 3. Вернуть демо-копию из HEAD — git снова видит чистое дерево
+git checkout -- db/custom.db
+git status                                 # «nothing to commit, working tree clean»
+
+# 4. Забрать обновления (багфиксы, CI/CD, документация) — теперь без конфликтов
+git pull origin main
+
+# 5. Перевести приложение на новую БД (абсолютный путь — см. раздел 10)
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:/var/lib/komikyv/custom.db|' .env
+grep '^DATABASE_URL' .env                  # убедиться в результате
+
+# 6. Схема живой БД догоняет новый код (additive-изменения, данные не трогаются)
+export PATH="$HOME/.bun/bin:$PATH"         # bun не всегда виден в non-interactive shell
+bun install
+bunx prisma generate
+bunx prisma db push
+
+# 7. Пересборка + синхронизация .env с runtime + запуск
+bun run build
+# сервис читает .env из WorkingDirectory (.next/standalone) — синхронизируем:
+if [ -f .next/standalone/.env ]; then
+  sed -i 's|^DATABASE_URL=.*|DATABASE_URL=file:/var/lib/komikyv/custom.db|' .next/standalone/.env
+else
+  cp .env .next/standalone/.env
+fi
+systemctl start komikyv
+systemctl is-active komikyv && journalctl -u komikyv -n 5 --no-pager
+```
+
+Если сервис работает не от root (`systemctl cat komikyv | grep '^User='`),
+отдайте ему файлы: `chown -R <этот_пользователь> /var/lib/komikyv`.
+
+После миграции:
+
+- `git pull` (ручной и авто-деплой из `deploy.yml`) больше никогда не конфликтует;
+- бэкап-крон из раздела 9 переключите на новый путь:
+  `sqlite3 /var/lib/komikyv/custom.db ".backup /backup/komikyv-$(date +\%F).db"`.
+
+---
+
+## 12. ASR / TTS / LLM — AI-провайдеры (z.ai, OpenAI-совместимые, Yandex SpeechKit)
+
+Тренажёр диалогов (LLM), озвучка слов (TTS) и анализ произношения (ASR)
+работают через единый слой `src/lib/ai-providers.ts`. Провайдер выбирается
+**отдельно для каждой функции** (можно смешивать, например TTS от Яндекса,
+ASR от z.ai, LLM от OpenAI) переменными из `.env`:
+
+```env
+AI_TTS_PROVIDER=zai      # zai | openai | yandex
+AI_ASR_PROVIDER=zai      # zai | openai | yandex
+AI_CHAT_PROVIDER=zai     # zai | openai
+```
+
+Не заданы — везде `zai` (как в песочнице, работает из коробки).
+
+> **На VM в production-режиме** переменные достаточно держать в `.env`
+> репозитория (корень проекта): авто-деплой копирует его в
+> `.next/standalone/.env` после сборки. При РУЧНОЙ сборке (`bun run build`)
+> скопируйте сами: `cp .env .next/standalone/.env` — standalone-каталог
+> пересоздаётся каждой сборкой.
+
+### 12.1. zai (по умолчанию)
+
+Конфиг `.z-ai-config` (JSON) ищется по порядку: CWD процесса
+(на VM это `.next/standalone` — **не кладите туда**, пересоздаётся при
+каждой сборке) → `~/.z-ai-config` → `/etc/.z-ai-config` (**рекомендуется**).
+
+```json
+{ "baseUrl": "https://api.z.ai/api/paas/v4", "apiKey": "<ваш ключ>" }
+```
+
+В песочнице конфиг выдан окружением в `/etc/.z-ai-config`.
+Модель LLM — переменная `LLM_MODEL` (по умолчанию `qwen3.8-flash`).
+
+### 12.2. openai — любой OpenAI-совместимый API
+
+OpenAI, Groq, OpenRouter (только чат), LocalAI, vLLM, а также self-hosted
+whisper-серверы (speaches, faster-whisper-server). Это же — способ работать
+с **локальными моделями без внешних ключей**.
+
+```env
+AI_OPENAI_BASE_URL=https://api.openai.com/v1
+AI_OPENAI_API_KEY=sk-...
+AI_TTS_MODEL=tts-1            # голоса: alloy, echo, fable, onyx, nova, shimmer
+AI_TTS_VOICE=alloy
+AI_ASR_MODEL=whisper-1        # у Groq: whisper-large-v3
+LLM_MODEL=gpt-4o-mini         # при AI_CHAT_PROVIDER=openai
+```
+
+Пути при необходимости переопределяются: `AI_TTS_PATH` (умолч.
+`/audio/speech`), `AI_ASR_PATH` (`/audio/transcriptions`),
+`AI_CHAT_PATH` (`/chat/completions`). Локальный whisper-сервер только для
+ASR подключается через отдельный `AI_ASR_BASE_URL` (см. §12.5) — TTS и
+LLM при этом остаются на внешнем шлюзе.
+
+Готовый пример — агрегатор **aitunnel.ru** (один ключ на LLM + TTS + ASR,
+модели из его каталога):
+
+```env
+AI_TTS_PROVIDER=openai
+AI_ASR_PROVIDER=openai
+AI_CHAT_PROVIDER=openai
+AI_OPENAI_BASE_URL=https://api.aitunnel.ru/v1
+AI_OPENAI_API_KEY=sk-aitunnel-<ваш ключ>
+AI_TTS_MODEL=gpt-audio-mini
+AI_TTS_VOICE=alloy
+AI_ASR_MODEL=gemini-3.1-flash-lite
+LLM_MODEL=gemma-4-26b-a4b-it
+```
+
+Особенности этих моделей уже учтены в коде (обрабатывается автоматически):
+
+- **Gemma** не принимает `role: system` — при ошибке 400 системный промпт
+  тренажёра вливается в первый user-тик и запрос повторяется;
+- **gpt-audio-mini** у части шлюзов не принимает `speed` (или
+  `response_format`) — запрос автоматически упрощается и повторяется;
+- голос z.ai `tongtong` подменяется на `AI_TTS_VOICE` (`alloy` по умолчанию);
+  голоса gpt-audio: alloy, ash, ballad, coral, echo, fable, onyx, nova,
+  sage, shimmer.
+
+### 12.3. yandex — Yandex SpeechKit
+
+```env
+AI_YANDEX_API_KEY=<ключ API из консоли Yandex Cloud>
+AI_YANDEX_FOLDER_ID=<folderId>
+AI_YANDEX_TTS_VOICE=alena     # alena, filipp, marina, polly, ermil, zahar…
+AI_YANDEX_LANG=ru-RU
+```
+
+TTS (v2 REST) возвращает lpcm — сервер сам оборачивает в WAV.
+ASR (v2 REST) принимает только OggOpus: записи браузера (webm/opus)
+**переконтейнируются через ffmpeg** — на VM нужен
+`apt install ffmpeg` (кодек не перекодируется, быстро).
+Работа через прокси: `AI_YANDEX_TTS_URL` / `AI_YANDEX_ASR_URL`.
+
+### 12.4. Проверка (на VM, API требует авторизации)
+
+Сначала — быстрый тест ключа прямо в шлюз (без приложения; подставьте
+свой ключ и модели):
+
+```bash
+source .env
+curl -s "$AI_OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $AI_OPENAI_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gemma-4-26b-a4b-it","messages":[{"role":"user","content":"привет"}]}' | head -c 300
+curl -s "$AI_OPENAI_BASE_URL/audio/speech" \
+  -H "Authorization: Bearer $AI_OPENAI_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-audio-mini","input":"Бур","voice":"alloy","response_format":"wav"}' \
+  --output /tmp/t.wav && file /tmp/t.wav   # должно быть WAV/RIFF
+```
+
+Затем — через приложение:
+
+```bash
+curl -s -c /tmp/c.txt -o /dev/null http://localhost:3000/api/auth/me   # получить CSRF-куку
+CSRF=$(awk '$6=="komi_csrf" {print $7}' /tmp/c.txt)
+curl -s -b /tmp/c.txt -c /tmp/c.txt -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
+  -d '{"email":"student@komikyv.ru","password":"ПАРОЛЬ_ДЕМО"}'
+curl -s -b /tmp/c.txt -X POST http://localhost:3000/api/tts \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
+  -d '{"text":"Бур"}' | head -c 120
+# нормальный ответ начинается с: {"audio":"data:audio/wav;base64,UklGR...
+journalctl -u komikyv | grep -E "TTS error|ASR error"   # диагностика ошибок
+```
+
+### 12.5. Распознавание коми речи (ASR)
+
+Готового языка «коми» (ISO `kv`) **нет ни у одного провайдера**: Whisper
+знает ~99 языков без коми, Yandex SpeechKit — ru/en/kk и т.д., Gemini —
+тоже без коми. Переключателя «язык = коми» не существует — вместо этого
+в приложении работают два механизма.
+
+**1. Подсказка ожидаемой фразы (contextual biasing) — включена по умолчанию.**
+Тренажёр произношения заранее знает целевое слово упражнения (фронтенд
+присылает его как `target`). Сервер передаёт его провайдеру в поле
+`prompt` — его поддерживают Whisper-совместимые API и LLM-ASR
+(gpt-4o-transcribe, Gemini): декодер не «сваливается» в русскую
+орфографию и транскрибирует коми буквами (ӧ, ы, і…). Это стандартный
+приём тренажёров произношения для низкоресурсных языков.
+
+Выключается, если покажется, что ASR «подсказывает ответ»:
+
+```env
+AI_ASR_HINT=0
+```
+
+Перед сравнением по Левенштейну обе строки нормализуются: убирается
+пунктуация, схлопываются пробелы и буквы і/и (ASR их практически не
+различает). Реальные ошибки в ӧ, ы и остальных буквах продолжают
+снижать точность. Опциональный код языка — `AI_ASR_LANGUAGE`
+(для коми кода нет, поле для экспериментов; пусто = автоопределение).
+
+**2. Отдельный ASR-эндпоинт — для «настоящего» коми-Whisper.**
+ASR можно направить на другой сервер, не трогая TTS и LLM (они
+остаются, например, на aitunnel):
+
+```env
+AI_ASR_PROVIDER=openai
+AI_ASR_BASE_URL=http://127.0.0.1:9000/v1   # локальный whisper-сервер
+AI_ASR_MODEL=<имя дообученной на коми модели>
+```
+
+Отдельный URL = отдельные учётные данные: ключ общего шлюза туда
+**не отправляется**; если серверу нужна авторизация — задайте
+`AI_ASR_API_KEY`. Для localhost/частных адресов без ключа работает
+вообще без `Authorization`.
+
+Сценарий: дообучить Whisper на коми-речи и поднять OpenAI-совместимый
+сервер (speaches, faster-whisper-server, `whisper.cpp server`). Учтите:
+открытых датасетов коми-речи практически нет (Common Voice коми не
+содержит) — данные придётся собирать самостоятельно (записи
+носителей/учителей + выравнивание текста).
+
+Совместимость: zai (SDK) и Yandex SpeechKit v2 подсказку `prompt` не
+принимают — там biasing просто не действует, поведение не меняется.
+Строгие шлюзы, отвергающие `prompt`/`language` (HTTP 400/422),
+автоматически получают повтор без них — как TTS-адаптер упрощает запрос.
+
+Ограничения (важно понимать):
+
+- коми-голосов нет ни у одного провайдера: озвучка фонетическая
+  (zai — `tongtong`, OpenAI — `alloy`…, Yandex — `alena`…);
+- ASR «транскрибирует как слышит» — с коми-подсказкой (§12.5) он
+  транскрибирует коми буквами; точность считается по расстоянию Левенштейна
+  к целевому слову — методика не зависит от провайдера;
+- озвучка слов словаря кэшируется в БД (`vocabulary.audioBase64`) —
+  повторные прослушивания не тратят API, кэш переживёт смену провайдера
+  (формат WAV одинаков у всех).
+
+## 13. Яндекс.Метрика
+
+Счётчик подключается **без пересборки и без изменения кода** — достаточно
+номера счётчика в `.env` и перезапуска сервиса.
+
+### 13.1. Подключение
+
+1. Создайте счётчик: https://metrika.yandex.ru → «Добавить счётчик»,
+   имя — произвольное (например, «Коми кыв»), адрес —
+   `https://комикыв.рф`. Убедитесь, что включены «Вебвизор» и «Карта
+   кликов» (по умолчанию включены).
+2. Скопируйте номер счётчика (число в списке счётчиков, рядом с именем).
+3. На VM добавьте в `.env` (корень репозитория):
+
+```env
+METRIKA_ID=12345678
+```
+
+4. Перезапустите сервис: `sudo systemctl restart komikyv`.
+   Пересборка (`bun run build`) НЕ нужна: сниппет генерируется роутом
+   `/metrika.js` при запросе, ID читается из env в рантайме. Плюс
+   деплой больше не затирает настройку — `.env` остаётся на месте.
+   Внимание: `.next/standalone/.env` деплой пересоздаёт из репо-`.env`,
+   правьте только корневой файл.
+
+### 13.2. Как это работает
+
+- В `head` каждой страницы подключается `/metrika.js` — серверный роут,
+  который отдаёт официальный асинхронный сниппет tag.js с вашим ID
+  (clickmap, trackLinks, accurateTrackBounce, webvisor).
+- Метрика не настроена (переменная пуста) — роут отдаёт безвредный
+  комментарий, сайт ничего не грузит с Яндекса.
+- CSP уже разрешает `mc.yandex.ru` в `script-src`, `connect-src`,
+  `img-src` — ничего дополнительно настраивать не нужно.
+- SPA-навигация (переходы по разделам без перезагрузки) отслеживается
+  tag.js автоматически через History API.
+- Без JavaScript метрика не считается (noscript-фолбэк не ставится —
+  JS отключён у доли процента посетителей).
+
+### 13.3. Проверка
+
+```bash
+curl -s https://комикыв.рф/metrika.js | head -3   # сниппет с вашим ID
+```
+
+Затем откройте сайт, зайдите в Метрику: «Отчёты → Посещаемость» —
+включите режим реального времени (иконка «Онлайн»), ваше посещение
+должно появиться. Кликните по паре разделов сайта — просмотры в
+визите должны увеличиться (значит, SPA-навигация считается). Если
+данные не доходят: DevTools (F12) → Network → фильтр `mc.yandex.ru`
+— запросы `watch` должны уходить со статусом 200.

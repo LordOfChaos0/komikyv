@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import ZAI from "z-ai-web-dev-sdk";
+import { chatCompletion, defaultChatModel } from "@/lib/ai-providers";
 
 const MessageSchema = z.object({
   scenarioId: z.string().nullable().optional(),
@@ -119,16 +119,15 @@ export async function POST(req: NextRequest) {
   // Основной ответ и грамматическая подсказка идут ПАРАЛЛЕЛЬНО
   // (раньше — строго друг за другом, что удваивало ожидание),
   // каждая со своим таймаутом: «...» в чате не может висеть бесконечно.
-  const model = process.env.LLM_MODEL || "qwen3.8-flash";
+  const model = process.env.LLM_MODEL || defaultChatModel();
   let assistantReply = "";
   let grammarFeedback = "";
   const t0 = Date.now();
   try {
-    const zai = await ZAI.create();
     const [mainRes, hintRes] = await Promise.allSettled([
       withTimeout(
-        zai.chat.completions.create({
-          // model обязателен для API Z.ai; SDK не подставляет его сам
+        // Провайдер — env AI_CHAT_PROVIDER (zai | openai), см. src/lib/ai-providers.ts
+        chatCompletion({
           model,
           messages: history,
           temperature: 0.7,
@@ -138,7 +137,7 @@ export async function POST(req: NextRequest) {
         "Ответ нейросети"
       ),
       withTimeout(
-        zai.chat.completions.create({
+        chatCompletion({
           model,
           messages: [
             {

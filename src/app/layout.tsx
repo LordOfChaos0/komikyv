@@ -34,6 +34,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} antialiased bg-background text-foreground min-h-screen flex flex-col`}
       >
+        {/* Яндекс.Метрика: активируется, когда на сервере задан METRIKA_ID.
+            Роут /metrika.js без него отдаёт безвредный комментарий (DEPLOY.md §13) */}
+        <script src="/metrika.js" async />
         <Providers>{children}</Providers>
         <Toaster richColors position="top-right" />
       </body>

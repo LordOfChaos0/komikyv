@@ -1,0 +1,527 @@
+// ============================================================
+// «Коми кыв» — универсальный слой AI-провайдеров.
+//
+// Одна точка входа для трёх AI-функций проекта:
+//   • TTS (озвучка слов)        → ttsSynthesize()
+//   • ASR (анализ произношения) → asrTranscribe()
+//   • LLM (тренажёр диалогов)   → chatCompletion()
+//
+// Провайдеры (выбираются env-переменными, можно смешивать):
+//   • zai     — z-ai-web-dev-sdk, по умолчанию; конфиг .z-ai-config
+//               (искать: CWD → ~/.z-ai-config → /etc/.z-ai-config)
+//   • openai  — любой OpenAI-совместимый REST API: OpenAI, Groq,
+//               LocalAI, vLLM, speaches/faster-whisper-server и т.п.
+//               Ключ: AI_OPENAI_API_KEY (или OPENAI_API_KEY).
+//   • yandex  — Yandex SpeechKit (TTS v2 + ASR v2 REST).
+//               Ключ: AI_YANDEX_API_KEY (или YC_API_KEY) + folderId.
+//
+// Выбор провайдеров (env, по отдельности на каждую функцию):
+//   AI_TTS_PROVIDER=zai|openai|yandex   (по умолчанию zai)
+//   AI_ASR_PROVIDER=zai|openai|yandex   (по умолчанию zai)
+//   AI_CHAT_PROVIDER=zai|openai         (по умолчанию zai)
+//
+// Контракт модуля: TTS возвращает аудио и фактический MIME (zai/yandex — WAV,
+// openai-шлюз может отдать mp3 — MIME берётся из ответа), ASR принимает
+// аудио из браузера (webm/ogg/wav/mp3) и возвращает текст, chat
+// возвращает completion в OpenAI-форме (choices[0].message.content).
+// Полное описание настроек — DEPLOY.md §12.
+// ============================================================
+
+import { spawn } from "node:child_process";
+import ZAI from "z-ai-web-dev-sdk";
+
+// ---------- Публичные типы ----------
+
+export interface TtsOptions {
+  /** Имя голоса у провайдера (zai: tongtong; openai: alloy…; yandex: alena…) */
+  voice?: string;
+  /** Скорость речи (zai 0.5–2.0; openai 0.25–4.0; yandex игнорирует) */
+  speed?: number;
+}
+
+export interface TtsResult {
+  /** Синтезированное аудио (zai/yandex — WAV; openai-шлюз может вернуть mp3) */
+  audio: Buffer;
+  /** MIME ответа — используется роутом /api/tts в data-URL */
+  mime: string;
+}
+
+export interface AsrResult {
+  /** Распознанный текст (может быть пустым, если тишина) */
+  text: string;
+}
+
+export interface AsrOptions {
+  /**
+   * Подсказка провайдеру — ожидаемый текст (contextual biasing).
+   * Whisper-совместимые декодеры и LLM-ASR (gpt-4o-transcribe, Gemini)
+   * учитывают её и не «сваливаются» в русскую орфографию — это главный
+   * инструмент распознавания коми, ведь готового языка «kv» ни у кого нет.
+   */
+  prompt?: string;
+  /** Код языка ISO-639-1 (для коми не существует — поле для экспериментов) */
+  language?: string;
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface ChatCompletionParams {
+  model: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  max_tokens?: number;
+}
+
+// ---------- Чтение env (первая непустая переменная из списка) ----------
+
+function env(...names: string[]): string | undefined {
+  for (const n of names) {
+    const v = process.env[n];
+    if (v && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+const ttsProvider = () => (env("AI_TTS_PROVIDER") || "zai").toLowerCase();
+const asrProvider = () => (env("AI_ASR_PROVIDER") || "zai").toLowerCase();
+const chatProvider = () => (env("AI_CHAT_PROVIDER") || "zai").toLowerCase();
+
+/** Модель LLM по умолчанию: AI_CHAT_MODEL → LLM_MODEL → дефолт провайдера */
+export function defaultChatModel(): string {
+  const explicit = env("AI_CHAT_MODEL", "LLM_MODEL");
+  if (explicit) return explicit;
+  return chatProvider() === "openai" ? "gpt-4o-mini" : "qwen3.8-flash";
+}
+
+// ---------- Конфигурации провайдеров ----------
+
+const openaiConfig = () => {
+  const sharedBase = env("AI_OPENAI_BASE_URL", "OPENAI_BASE_URL") || "https://api.openai.com/v1";
+  const ownAsrBase = env("AI_ASR_BASE_URL");
+  return {
+    baseUrl: sharedBase,
+    apiKey: env("AI_OPENAI_API_KEY", "OPENAI_API_KEY") || "",
+    ttsPath: env("AI_TTS_PATH") || "/audio/speech",
+    asrPath: env("AI_ASR_PATH") || "/audio/transcriptions",
+    chatPath: env("AI_CHAT_PATH") || "/chat/completions",
+    ttsModel: env("AI_TTS_MODEL") || "tts-1",
+    ttsVoice: env("AI_TTS_VOICE") || "alloy",
+    asrModel: env("AI_ASR_MODEL") || "whisper-1",
+    // ASR можно направить на ДРУГОЙ сервер, не трогая TTS/LLM: сценарий —
+    // локальный дообученный на коми Whisper при TTS/чате на общем шлюзе.
+    // Отдельный URL = отдельные учётные данные: ключ общего шлюза туда не
+    // отправляется, если явно не задан AI_ASR_API_KEY (локальные whisper-серверы
+    // обычно работают без авторизации).
+    asrBaseUrl: ownAsrBase || sharedBase,
+    asrApiKey: env("AI_ASR_API_KEY") || (ownAsrBase ? "" : env("AI_OPENAI_API_KEY", "OPENAI_API_KEY") || ""),
+    asrLanguage: env("AI_ASR_LANGUAGE") || "",
+  };
+};
+
+const yandexConfig = () => ({
+  apiKey: env("AI_YANDEX_API_KEY", "YC_API_KEY", "YANDEX_API_KEY") || "",
+  folderId: env("AI_YANDEX_FOLDER_ID", "YC_FOLDER_ID", "YANDEX_FOLDER_ID") || "",
+  ttsVoice: env("AI_YANDEX_TTS_VOICE") || "alena",
+  ttsLang: env("AI_YANDEX_LANG", "AI_YANDEX_TTS_LANG") || "ru-RU",
+  asrLang: env("AI_YANDEX_ASR_LANG") || "ru-RU",
+  // Переопределяется только при работе через собственный прокси (или в тестах)
+  ttsUrl: env("AI_YANDEX_TTS_URL") || "https://tts.api.cloud.yandex.net/speech/v2/tts",
+  asrUrl: env("AI_YANDEX_ASR_URL") || "https://stt.api.cloud.yandex.net/speech/v2/recognize",
+});
+
+// ---------- Утилиты ----------
+
+/** Текст ошибки HTTP-ответа: статус + первые символы тела (не выбрасывает) */
+async function httpError(prefix: string, res: Response): Promise<Error> {
+  let body = "";
+  try {
+    body = (await res.text()).slice(0, 300);
+  } catch {
+    /* тело не читается — не важно */
+  }
+  return new Error(`${prefix}: HTTP ${res.status} ${body}`);
+}
+
+/** PCM16 mono → WAV (заголовок RIFF, 44 байта) — для Yandex TTS (format=lpcm) */
+function pcmToWav(pcm: Buffer, sampleRate: number, channels = 1, bits = 16): Buffer {
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16); // размер блока fmt
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE((sampleRate * channels * bits) / 8, 28); // байт/сек
+  header.writeUInt16LE((channels * bits) / 8, 32); // выравнивание блока
+  header.writeUInt16LE(bits, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+/** Расширение файла по MIME — для multipart-загрузки в OpenAI-совместимый ASR */
+function mimeToExt(mime: string): string {
+  if (/webm/i.test(mime)) return "webm";
+  if (/ogg/i.test(mime)) return "ogg";
+  if (/wav/i.test(mime)) return "wav";
+  if (/mp4|m4a/i.test(mime)) return "m4a";
+  if (/mp3|mpeg/i.test(mime)) return "mp3";
+  return "webm";
+}
+
+/**
+ * Переконтейнирование аудио (webm/opus → ogg/opus) через ffmpeg.
+ * Кодек не перекодируется (-c:a copy) — быстро и без потерь.
+ * Возвращает null, если ffmpeg не установлен или не смог.
+ */
+function remuxToOgg(input: Buffer): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const ffmpeg = spawn("ffmpeg", ["-i", "pipe:0", "-vn", "-c:a", "copy", "-f", "ogg", "pipe:1"], {
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    const chunks: Buffer[] = [];
+    ffmpeg.stdout.on("data", (d: Buffer) => chunks.push(d));
+    ffmpeg.on("error", () => resolve(null)); // ffmpeg не установлен
+    ffmpeg.on("close", (code) => resolve(code === 0 && chunks.length > 0 ? Buffer.concat(chunks) : null));
+    ffmpeg.stdin.on("error", () => undefined); // EPIPE при сбое — не роняем процесс
+    ffmpeg.stdin.end(input);
+  });
+}
+
+// ---------- TTS ----------
+
+/** z.ai (как было до рефакторинга — без изменения поведения) */
+async function zaiTts(text: string, opts: TtsOptions): Promise<TtsResult> {
+  const zai = await ZAI.create();
+  const response = await zai.audio.tts.create({
+    input: text,
+    voice: opts.voice || "tongtong",
+    speed: opts.speed ?? 1.0,
+    response_format: "wav",
+    stream: false,
+  } as any);
+  const arrayBuffer = await (response as Response).arrayBuffer();
+  return { audio: Buffer.from(new Uint8Array(arrayBuffer)), mime: "audio/wav" };
+}
+
+/** Голоса, которые понимают OpenAI-совместимые TTS (tts-1 / gpt-audio-mini) */
+const OPENAI_TTS_VOICES = new Set([
+  "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse",
+]);
+
+/**
+ * OpenAI-совместимый TTS: POST {base}/audio/speech → аудио (обычно WAV).
+ *
+ * Шлюзы и модели капризны: одни не принимают speed (gpt-audio-mini у части
+ * агрегаторов), другие — response_format. Поэтому при 400/422 запрос
+ * автоматически упрощается: без speed → без response_format. Голоса z.ai
+ * (tongtong) OpenAI-совместимым API незнакомы — подставляется AI_TTS_VOICE.
+ */
+async function openaiTts(text: string, opts: TtsOptions): Promise<TtsResult> {
+  const c = openaiConfig();
+  if (!c.apiKey) {
+    throw new Error("AI_TTS_PROVIDER=openai: не задан ключ — заполните AI_OPENAI_API_KEY (или OPENAI_API_KEY)");
+  }
+  const voice = opts.voice && OPENAI_TTS_VOICES.has(opts.voice) ? opts.voice : c.ttsVoice;
+  const speed = Math.min(4, Math.max(0.25, opts.speed ?? 1.0));
+
+  const attempts = [
+    { model: c.ttsModel, input: text, voice, speed, response_format: "wav" },
+    { model: c.ttsModel, input: text, voice, response_format: "wav" },
+    { model: c.ttsModel, input: text, voice },
+  ];
+
+  let lastError: Error | null = null;
+  for (const body of attempts) {
+    const res = await fetch(c.baseUrl + c.ttsPath, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (res.ok) {
+      const arrayBuffer = await res.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) throw new Error("OpenAI-совместимый TTS: пустой ответ");
+      const contentType = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      const mime = contentType.startsWith("audio/") ? contentType : "audio/wav";
+      return { audio: Buffer.from(new Uint8Array(arrayBuffer)), mime };
+    }
+    lastError = await httpError("OpenAI-совместимый TTS", res);
+    // ретраи имеют смысл только при 400/422; 401/403/404/5xx упрощением не лечатся
+    if (res.status !== 400 && res.status !== 422) break;
+  }
+  throw lastError || new Error("OpenAI-совместимый TTS: неизвестная ошибка");
+}
+
+/** Yandex SpeechKit TTS v2: lpcm 48kHz → оборачиваем в WAV */
+async function yandexTts(text: string, opts: TtsOptions): Promise<TtsResult> {
+  const c = yandexConfig();
+  if (!c.apiKey) throw new Error("AI_TTS_PROVIDER=yandex: не задан AI_YANDEX_API_KEY (или YC_API_KEY)");
+  if (!c.folderId) throw new Error("AI_TTS_PROVIDER=yandex: не задан AI_YANDEX_FOLDER_ID (или YC_FOLDER_ID)");
+  const params = new URLSearchParams({
+    text,
+    lang: c.ttsLang,
+    voice: opts.voice || c.ttsVoice,
+    folderId: c.folderId,
+    format: "lpcm",
+    sampleRateHertz: "48000",
+  });
+  const res = await fetch(c.ttsUrl + "?" + params.toString(), {
+    method: "POST",
+    headers: { Authorization: `Api-Key ${c.apiKey}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw await httpError("Yandex TTS", res);
+  const pcm = Buffer.from(new Uint8Array(await res.arrayBuffer()));
+  if (pcm.length === 0) throw new Error("Yandex TTS: пустой ответ");
+  return { audio: pcmToWav(pcm, 48000), mime: "audio/wav" };
+}
+
+/** Синтез речи. Провайдер — AI_TTS_PROVIDER (по умолчанию zai). */
+export async function ttsSynthesize(text: string, opts: TtsOptions = {}): Promise<TtsResult> {
+  switch (ttsProvider()) {
+    case "zai":
+      return zaiTts(text, opts);
+    case "openai":
+      return openaiTts(text, opts);
+    case "yandex":
+    case "speechkit":
+      return yandexTts(text, opts);
+    default:
+      throw new Error(`AI_TTS_PROVIDER="${ttsProvider()}" не поддерживается (доступно: zai | openai | yandex)`);
+  }
+}
+
+// ---------- ASR ----------
+
+/** z.ai (как было до рефакторинга) */
+async function zaiAsr(audio: Buffer): Promise<AsrResult> {
+  const zai = await ZAI.create();
+  const response = await zai.audio.asr.create({ file_base64: audio.toString("base64") } as any);
+  const text =
+    typeof response === "string" ? response : ((response as any)?.text || (response as any)?.transcript || "");
+  return { text: String(text) };
+}
+
+/** localhost/локальная сеть: домашние whisper-серверы обычно без авторизации */
+function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".local") ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * OpenAI-совместимый ASR: POST {base}/audio/transcriptions (multipart).
+ *
+ * Распознавание коми (готового языка «kv» ни у одного провайдера нет) —
+ * через contextual biasing: opts.prompt с ожидаемой фразой смещает декодер
+ * к коми-орфографии. Строгие шлюзы, отвергающие prompt/language (400/422),
+ * получают повтор без них — как TTS-адаптер упрощает запрос.
+ *
+ * URL и ключ ASR переопределяются ОТДЕЛЬНО от TTS/чата (AI_ASR_BASE_URL /
+ * AI_ASR_API_KEY): так ASR можно направить на локальный коми-Whisper
+ * (faster-whisper / whisper.cpp сервер с OpenAI-совместимым API), оставив
+ * TTS и LLM на общем шлюзе. Локальные хосты без ключа работают без Authorization.
+ */
+async function openaiAsr(audio: Buffer, mime: string, opts: AsrOptions = {}): Promise<AsrResult> {
+  const c = openaiConfig();
+  const baseUrl = c.asrBaseUrl;
+  const apiKey = c.asrApiKey;
+  if (!apiKey && !isLocalBaseUrl(baseUrl)) {
+    throw new Error("AI_ASR_PROVIDER=openai: не задан ключ — заполните AI_ASR_API_KEY (или AI_OPENAI_API_KEY)");
+  }
+  const language = (opts.language || c.asrLanguage || "").trim();
+  // Whisper ограничивает prompt ~224 токенами — режем с запасом
+  const prompt = (opts.prompt || "").trim().slice(0, 800);
+
+  // Лестница попыток: полная → без language → без подсказок (для строгих шлюзов)
+  const attempts: Record<string, string>[] = [];
+  const full: Record<string, string> = {};
+  if (prompt) full.prompt = prompt;
+  if (language) full.language = language;
+  attempts.push(full);
+  if (prompt) attempts.push({ prompt });
+  attempts.push({});
+  const unique = attempts.filter(
+    (a, i) => attempts.findIndex((b) => JSON.stringify(b) === JSON.stringify(a)) === i
+  );
+
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  let lastError: Error | null = null;
+  for (const extra of unique) {
+    const form = new FormData();
+    const bytes = new Uint8Array(audio.byteLength);
+    bytes.set(audio);
+    form.append("file", new Blob([bytes], { type: mime || "audio/webm" }), `audio.${mimeToExt(mime)}`);
+    form.append("model", c.asrModel);
+    for (const [k, v] of Object.entries(extra)) form.append(k, v);
+    const res = await fetch(baseUrl + c.asrPath, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const text = typeof data === "string" ? data : (data?.text || data?.transcript || "");
+      return { text: String(text) };
+    }
+    lastError = await httpError("OpenAI-совместимый ASR", res);
+    // ретраи имеют смысл только при 400/422; 401/403/404/5xx упрощением не лечатся
+    if (res.status !== 400 && res.status !== 422) break;
+  }
+  throw lastError || new Error("OpenAI-совместимый ASR: неизвестная ошибка");
+}
+
+/** Yandex SpeechKit ASR v2: понимает только OggOpus; webm переконтейнируем через ffmpeg */
+async function yandexAsr(audio: Buffer, mime: string): Promise<AsrResult> {
+  const c = yandexConfig();
+  if (!c.apiKey) throw new Error("AI_ASR_PROVIDER=yandex: не задан AI_YANDEX_API_KEY (или YC_API_KEY)");
+  if (!c.folderId) throw new Error("AI_ASR_PROVIDER=yandex: не задан AI_YANDEX_FOLDER_ID (или YC_FOLDER_ID)");
+
+  let ogg = audio;
+  if (!/ogg/i.test(mime)) {
+    const converted = await remuxToOgg(audio);
+    if (!converted) {
+      throw new Error(
+        `Yandex ASR: v2-REST принимает только OggOpus, браузер шлёт ${mime || "webm"} — ` +
+          "для переконтейнирования нужен ffmpeg на сервере (apt install ffmpeg)"
+      );
+    }
+    ogg = converted;
+  }
+
+  const params = new URLSearchParams({ topic: "general", lang: c.asrLang, folderId: c.folderId });
+  const res = await fetch(c.asrUrl + "?" + params.toString(), {
+    method: "POST",
+    headers: { Authorization: `Api-Key ${c.apiKey}`, "Content-Type": "audio/ogg-opus" },
+    body: new Uint8Array(ogg),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw await httpError("Yandex ASR", res);
+
+  // v2-recognize возвращает текст (плоский или JSON — парсим оба варианта)
+  const raw = await res.text();
+  let text = raw;
+  try {
+    const parsed = JSON.parse(raw);
+    text = parsed?.result ?? parsed?.text ?? raw;
+  } catch {
+    /* плоский текст — оставляем как есть */
+  }
+  return { text: String(text).trim() };
+}
+
+/**
+ * Распознавание речи. Провайдер — AI_ASR_PROVIDER (по умолчанию zai).
+ * mime — тип входного аудио (браузер MediaRecorder шлёт audio/webm).
+ * opts.prompt — подсказка с ожидаемой фразой (см. /api/asr): zai SDK и
+ * Yandex v2-REST подсказку не принимают — там она просто игнорируется,
+ * OpenAI-совместимые провайдеры используют её для смещения к коми-орфографии.
+ */
+export async function asrTranscribe(
+  audio: Buffer,
+  mime = "audio/webm",
+  opts: AsrOptions = {}
+): Promise<AsrResult> {
+  switch (asrProvider()) {
+    case "zai":
+      return zaiAsr(audio);
+    case "openai":
+      return openaiAsr(audio, mime, opts);
+    case "yandex":
+    case "speechkit":
+      return yandexAsr(audio, mime);
+    default:
+      throw new Error(`AI_ASR_PROVIDER="${asrProvider()}" не поддерживается (доступно: zai | openai | yandex)`);
+  }
+}
+
+// ---------- LLM-чат ----------
+
+/** z.ai через SDK (конфиг .z-ai-config) */
+async function zaiChat(params: ChatCompletionParams): Promise<any> {
+  const zai = await ZAI.create();
+  return zai.chat.completions.create(params as any);
+}
+
+/** Сливает system-сообщения в первый user-тик — модели семейства Gemma не принимают role: system */
+function mergeSystemIntoUser(messages: ChatMessage[]): ChatMessage[] {
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const rest = messages.filter((m) => m.role !== "system");
+  const firstUser = rest.findIndex((m) => m.role === "user");
+  if (firstUser === -1) return [{ role: "user", content: systemText }, ...rest];
+  return [
+    ...rest.slice(0, firstUser),
+    { role: "user", content: `${systemText}\n\n${rest[firstUser].content}` },
+    ...rest.slice(firstUser + 1),
+  ];
+}
+
+/**
+ * OpenAI-совместимый чат: POST {base}/chat/completions → completion (OpenAI-форма).
+ * Если модель отвергла роль system (400/422 — типично для Gemma), системный
+ * промпт автоматически вливается в первый user-тик и запрос повторяется.
+ */
+async function openaiChat(params: ChatCompletionParams): Promise<any> {
+  const c = openaiConfig();
+  if (!c.apiKey) {
+    throw new Error("AI_CHAT_PROVIDER=openai: не задан ключ — заполните AI_OPENAI_API_KEY (или OPENAI_API_KEY)");
+  }
+  const doFetch = (messages: ChatMessage[]) =>
+    fetch(c.baseUrl + c.chatPath, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: params.model,
+        messages,
+        temperature: params.temperature,
+        max_tokens: params.max_tokens,
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+
+  let res = await doFetch(params.messages);
+  if ((res.status === 400 || res.status === 422) && params.messages.some((m) => m.role === "system")) {
+    res = await doFetch(mergeSystemIntoUser(params.messages));
+  }
+  if (!res.ok) throw await httpError("OpenAI-совместимый LLM", res);
+  return await res.json();
+}
+
+/**
+ * Запрос к LLM. Провайдер — AI_CHAT_PROVIDER (по умолчанию zai).
+ * Возвращает completion в OpenAI-форме (choices[0].message.content),
+ * поэтому существующий парсер диалогового роута работает без изменений.
+ */
+export async function chatCompletion(params: ChatCompletionParams): Promise<any> {
+  switch (chatProvider()) {
+    case "zai":
+      return zaiChat(params);
+    case "openai":
+      return openaiChat(params);
+    default:
+      throw new Error(`AI_CHAT_PROVIDER="${chatProvider()}" не поддерживается (доступно: zai | openai)`);
+  }
+}

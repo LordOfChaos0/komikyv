@@ -10,6 +10,8 @@ export interface CurrentUser {
   fullName: string | null;
   isActive: boolean;
   emailVerified?: boolean;
+  /** Дата регистрации (ISO-строка) — для отображения в профиле */
+  createdAt?: string | null;
   profile?: {
     level: string;
     xp: number;

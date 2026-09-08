@@ -187,7 +187,7 @@ export function ProfileView() {
               Дата регистрации
             </span>
             <span className="font-medium">
-              {new Date(user.id.slice(-8) ? Date.now() : Date.now()).toLocaleDateString("ru-RU")}
+              {user.createdAt ? new Date(user.createdAt).toLocaleDateString("ru-RU") : "—"}
             </span>
           </div>
           <div className="flex justify-between">
