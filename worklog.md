@@ -1019,3 +1019,18 @@ Work Log:
 Stage Summary:
 - Пользователю выдан порядок: журнал → скрипт на VM (node scripts/smtp-check.js [--send]) → расшифровка; скрипт сам находит расхождение .env/standalone-.env и типичные ошибки Яндекса
 - В песочнице SMTP в .env не настроен (DEV-режим) — на VM состояние неизвестно, скрипт покажет за минуту
+
+---
+Task ID: 25 (продолжение)
+Agent: Main
+Task: Пуш SMTP-диагностики по PAT пользователя
+
+Work Log:
+- Пуш через одноразовый credential-helper (токен нигде не сохранён): 2045d61..61ef26a
+- CI на 61ef26a: completed/success
+- Deploy на 61ef26a: completed/success, но шаг «Деплой (git pull → bun install → prisma → build → restart)» — skipped (SSH-секреты не заданы) — VM автоматически НЕ обновилась
+- Дёргать пересборку на VM не требуется: изменения (smtp-check.js, DEPLOY.md) не входят в приложение — достаточно git pull
+
+Stage Summary:
+- На VM для диагностики SMTP: cd ~/komikyv && git pull origin main && node scripts/smtp-check.js (сборка/рестарт сервиса не нужны)
+- Токен использован одноразово, лог-строк с ним нет; после завершения работы пользователю стоит отозвать его в настройках GitHub (fine-grained PAT виден в id-менеджере)
