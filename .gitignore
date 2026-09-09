@@ -58,7 +58,9 @@ package-lock.json
 
 # Sandbox artifacts (not part of the product)
 download/
-scripts/
+scripts/*
+# ...кроме полезных диагностических скриптов для VM:
+!scripts/smtp-check.js
 tool-results/
 /build-test/
 dev.log
