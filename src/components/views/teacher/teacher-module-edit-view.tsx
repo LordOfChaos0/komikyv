@@ -88,6 +88,7 @@ export function TeacherModuleEditView() {
       queryClient.invalidateQueries({ queryKey: ["teacher-modules"] });
       toast.success("Отправлено на модерацию");
     },
+    onError: (e: any) => toast.error(e.message || "Не удалось отправить на модерацию"),
   });
 
   if (!module) {
@@ -218,13 +219,13 @@ export function TeacherModuleEditView() {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2 justify-end pt-4 border-t border-border">
-        {module.status === "draft" && (
+        {(module.status === "draft" || module.status === "rejected") && (
           <Button
             onClick={() => submitMutation.mutate()}
             disabled={submitMutation.isPending || !lessons?.items.length}
           >
             <Send className="h-4 w-4 mr-1" />
-            {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Отправить на модерацию"}
+            {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : module.status === "rejected" ? "Повторно отправить на модерацию" : "Отправить на модерацию"}
           </Button>
         )}
       </div>

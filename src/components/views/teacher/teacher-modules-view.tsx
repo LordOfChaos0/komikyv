@@ -254,7 +254,7 @@ export function TeacherModulesView() {
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Редактировать
                     </Button>
-                    {m.status === "draft" && (
+                    {(m.status === "draft" || m.status === "rejected") && (
                       <Button
                         size="sm"
                         variant="default"
@@ -262,7 +262,7 @@ export function TeacherModulesView() {
                         disabled={submitForModerationMutation.isPending}
                       >
                         <Send className="h-3.5 w-3.5 mr-1" />
-                        На модерацию
+                        {m.status === "rejected" ? "Повторно на модерацию" : "На модерацию"}
                       </Button>
                     )}
                     <Button

@@ -38,11 +38,37 @@ export async function PUT(
   if (!parsed.success) {
     return NextResponse.json({ error: "Ошибка валидации", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { categories, status, ...rest } = parsed.data;
+  const { categories, ...rest } = parsed.data;
+  const status = parsed.data.status;
+
+  // Машина состояний (SRS 1.5 REC): публикация/отклонение — только через
+  // модерацию администратора. Преподаватель может отправить на модерацию
+  // черновик или отклонённый модуль; самопубликация запрещена.
+  if (status) {
+    if (user.role === "teacher") {
+      const canSubmit =
+        (mod.status === "draft" || mod.status === "rejected") && status === "on_moderation";
+      if (!canSubmit) {
+        return NextResponse.json(
+          {
+            error: `Недопустимый переход статуса «${mod.status}» → «${status}». Преподаватель может отправить на модерацию только черновик или отклонённый модуль.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
+  // BUGFIX: ранее status деструктурировался из rest и не попадал в update —
+  // статус «on_moderation» никогда не сохранялся, очередь модерации у
+  // администратора оставалась пустой (кнопка «Отправить» работала, но
+  // безрезультатно).
+  const updateData: Record<string, unknown> = { ...rest };
+  if (status) updateData.status = status;
 
   const updated = await db.module.update({
     where: { id },
-    data: rest as any,
+    data: updateData as any,
   });
 
   if (status === "on_moderation" && mod.status !== "on_moderation") {

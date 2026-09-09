@@ -1050,3 +1050,22 @@ Work Log:
 Stage Summary:
 - Пользователю: на VM исправить SMTP_FROM (совпадать с SMTP_USER) или удалить строку → cp .env .next/standalone/.env → systemctl restart komikyv — пересборка не нужна
 - Код-фикс подействует при следующем обновлении приложения на VM (§8.3)
+
+---
+Task ID: 27
+Agent: Main
+Task: Баг «модули не отправляются на модерацию»
+
+Work Log:
+- Воспроизведение через API (dev-сервер): PUT /api/teacher/modules/:id {status:on_moderation} возвращал 200, но статус модуля оставался draft — очередь модерации пустая
+- Причина: src/app/api/teacher/modules/[id]/route.ts, PUT — status деструктурировался из parsed.data, но в db.module.update передавался только rest (без status). ModerationLog при этом писался, но сам статус — нет
+- Фикс API: status включается в update; добавлена машина состояний (SRS 1.5 REC): преподаватель может перевести в on_moderation только из draft/rejected (самопубликация/произвольные переходы → 400 с внятным текстом), админ не ограничен
+- Фронт: кнопка «Отправить на модерацию» теперь показывается и для rejected («Повторно...») в списке и в редакторе модуля; у submitMutation добавлен onError (раньше ошибки были немыми)
+- E2E-проверка: отправка → status on_moderation ✓; очередь админа видит модуль (логи модерации) ✓; approve → published ✓; самопубликация 400 ✓; повтор из on_moderation 400 ✓
+- Тестовые данные вычищены: git checkout db/custom.db (совпадает с репозиторием); tsc 0 ошибок src/, eslint чист
+- (Нюанс среды: dev-сервер песочницы убит pkill'ом и не переживает завершение bash-команды — к следующей задаче со скриншотами надо поднимать его в рамках одного вызова или искать супервизор)
+- Коммит, push, CI
+
+Stage Summary:
+- На прод фикс подействует после обновления приложения по §8.3 (код приложения изменился — пересборка обязательна): git pull → bun install → prisma db push → bun run build → cp .env .next/standalone/.env → systemctl restart komikyv
+- Побочные улучшения: state machine статусов модулей + повторная отправка отклонённых модулей
