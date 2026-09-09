@@ -27,7 +27,22 @@ function getSmtpConfig(): SmtpConfig | null {
   const port = parseInt(process.env.SMTP_PORT || "465", 10);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM || (user ? `Коми кыв <${user}>` : null);
+  let from = process.env.SMTP_FROM || (user ? `Коми кыв <${user}>` : null);
+
+  // Яндекс требует, чтобы адрес в MAIL FROM совпадал с ящиком авторизации,
+  // иначе конверт отклоняется: «553 5.7.1 Sender address rejected: user not
+  // found» (типичный случай — SMTP_FROM из примера noreply@komikyv.ru).
+  // Для яндексовых SMTP автоматически отправляем от SMTP_USER.
+  if (host && user && from) {
+    const fromAddr = ((from.match(/<([^>]+)>/) || [null, from])[1] || "").trim() || from.trim();
+    const isYandex = /(^|\.)yandex\.(ru|com|net|ua|by|kz)$/i.test(host.replace(/^smtp\./i, ""));
+    if (isYandex && fromAddr.toLowerCase() !== user.toLowerCase()) {
+      console.warn(
+        `[mailer] SMTP_FROM (${fromAddr}) не совпадает с SMTP_USER (${user}). Яндекс требует совпадения адреса отправителя с ящиком авторизации — письмо уйдёт от ${user}. Уберите или исправьте SMTP_FROM в .env.`
+      );
+      from = `Коми кыв <${user}>`;
+    }
+  }
 
   if (!host || !user || !pass) {
     return null; // SMTP not configured

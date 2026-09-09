@@ -93,8 +93,8 @@ function decodeError(e) {
   }
   if (code === "ETIMEDOUT" || code === "ECONNREFUSED" || code === "ESOCKET")
     return "Соединение не установлено — см. шаг сети выше (блокировка порта хостером).";
-  if (/55[04]|5\.7\.1|reject|spoof/i.test(resp))
-    return "Письмо отклонено на этапе конверта. Частая причина: SMTP_FROM не совпадает со SMTP_USER (Яндекс требует совпадения) или ящик не подтверждён (телефон в Яндекс ID).";
+  if (/55[0-4]|5\.7\.1|reject|spoof/i.test(resp))
+    return "Конверт (MAIL FROM) отклонён. Почти всегда SMTP_FROM != SMTP_USER: Яндекс отправляет письмо только от ящика авторизации (пример noreply@komikyv.ru из .env.example не существует). Исправление: SMTP_FROM=\"Коми кыв <тот-же-адрес-что-SMTP_USER>\" или удалите строку — код по умолчанию отправляет от SMTP_USER.";
   return `${code} ${resp}`;
 }
 

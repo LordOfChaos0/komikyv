@@ -1034,3 +1034,19 @@ Work Log:
 Stage Summary:
 - На VM для диагностики SMTP: cd ~/komikyv && git pull origin main && node scripts/smtp-check.js (сборка/рестарт сервиса не нужны)
 - Токен использован одноразово, лог-строк с ним нет; после завершения работы пользователю стоит отозвать его в настройках GitHub (fine-grained PAT виден в id-менеджере)
+
+---
+Task ID: 26
+Agent: Main
+Task: 553 5.7.1 Sender address rejected — расшифровка по логу пользователя + фикс
+
+Work Log:
+- Лог с VM: «Mail command failed: 553 5.7.1 Sender address rejected: user not found» — AUTH ПРОШЁЛ (пароль приложения верный), конверт отклонён: адрес в SMTP_FROM не существует у Яндекса (ловушка-пример noreply@komikyv.ru из .env.example)
+- mailer.ts: нормализация From в getSmtpConfig() — для яндексовых SMTP при From≠USER письмо автоматически уходит от SMTP_USER (warning в лог), не-Яндекс провайдеры с алиасами не затронуты; юнит-тест 4/4, tsc по src/ чист
+- smtp-check.js: расшифровка 553 дополнена реальным наблюдением; .env.example: SMTP_FROM очищен от несуществующего адреса + комментарий о требовании Яндекса
+- DEPLOY.md §14.3: строка 553/550/554 переписана под реальный кейс
+- Коммит и push (PAT пользователя, одноразово)
+
+Stage Summary:
+- Пользователю: на VM исправить SMTP_FROM (совпадать с SMTP_USER) или удалить строку → cp .env .next/standalone/.env → systemctl restart komikyv — пересборка не нужна
+- Код-фикс подействует при следующем обновлении приложения на VM (§8.3)
