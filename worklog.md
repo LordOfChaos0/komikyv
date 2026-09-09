@@ -1069,3 +1069,17 @@ Work Log:
 Stage Summary:
 - На прод фикс подействует после обновления приложения по §8.3 (код приложения изменился — пересборка обязательна): git pull → bun install → prisma db push → bun run build → cp .env .next/standalone/.env → systemctl restart komikyv
 - Побочные улучшения: state machine статусов модулей + повторная отправка отклонённых модулей
+
+---
+Task ID: 28
+Agent: Main
+Task: Пуш фикса модерации (ac1c069) — пользователь прислал новый PAT
+
+Work Log:
+- Пуш ac1c069 → origin/main через одноразовый credential.helper (токен нигде не сохранён, рекомендован отзыв)
+- CI workflow для ac1c069: completed/success; Deploy workflow: completed/success (сам деплой на VM, как всегда, SKIPPED — SSH-секреты не заданы)
+- worklog-правка: обновлена команда обновления прода в Stage Summary Task 27 (prisma db push вместо migrate deploy — миграций в проекте нет)
+
+Stage Summary:
+- 4b2a5d5..ac1c069 запушен, CI зелёный; пользователю осталось обновить VM по DEPLOY.md §8.3
+- Открытая задача: DOCX со скриншотами по критериям SRS (жду ответов на 6 вопросов либо применю рекомендованные дефолты)
